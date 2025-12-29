@@ -12,8 +12,8 @@ android {
         applicationId = "com.kevinluo.autoglm"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.0.4"
+        versionCode = 5
+        versionName = "0.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -72,6 +72,13 @@ android {
 // Copy dev_profiles.json to assets for debug builds only
 android.applicationVariants.all {
     val variant = this
+    
+    // Custom APK file name
+    outputs.all {
+        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+        output.outputFileName = "AutoGLM-${variant.versionName}-${variant.buildType.name}.apk"
+    }
+    
     if (variant.buildType.name == "debug") {
         val copyDevProfiles = tasks.register("copyDevProfiles${variant.name.replaceFirstChar { it.uppercase() }}") {
             val devProfilesFile = rootProject.file("dev_profiles.json")
