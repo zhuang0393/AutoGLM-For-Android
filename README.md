@@ -522,6 +522,10 @@ A:
 
 本项目基于 [MIT License](LICENSE) 开源。
 
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Luokavin/AutoGLM-For-Android&type=Date)](https://star-history.com/#Luokavin/AutoGLM-For-Android&Date)
+
 ## 🙏 致谢
 
 - [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) - 原始开源项目
