@@ -25,12 +25,47 @@ import com.kevinluo.autoglm.settings.SettingsManager
 import com.kevinluo.autoglm.util.KeepAliveManager
 import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.*
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 后台持续监听服务
  * 
  * 在后台持续监听语音，检测唤醒词后触发相应操作
+ * 
+ * 状态机设计：
+ * ```
+ * 状态转换图:
+ * 
+ *                    ┌─────────────────────────────────────┐
+ *                    │                                     │
+ *                    ▼                                     │
+ *   ┌──────┐    ┌──────────┐    ┌───────────┐             │
+ *   │ IDLE │───▶│ STARTING │───▶│ LISTENING │─────────────┤
+ *   └──────┘    └──────────┘    └───────────┘             │
+ *       ▲            ▲               │  │                 │
+ *       │            │               │  │                 │
+ *       │            │    ┌──────────┘  └──────────┐      │
+ *       │            │    ▼                        ▼      │
+ *       │      ┌─────────────────┐    ┌───────────────────┐
+ *       │      │ PAUSED_BY_USER  │    │PAUSED_BY_SCREEN_OFF│
+ *       │      └─────────────────┘    └───────────────────┘
+ *       │                                                 │
+ *       │                                                 │
+ *       │         ┌─────────┐                             │
+ *       └─────────│ STOPPED │◀────────────────────────────┘
+ *                 └─────────┘
+ * 
+ * 转换规则:
+ * - IDLE/STOPPED/PAUSED_* -> STARTING: 调用 startListening()
+ * - STARTING -> LISTENING: 初始化完成，开始录音
+ * - STARTING -> STOPPED: 初始化失败
+ * - STARTING -> PAUSED_BY_SCREEN_OFF: 屏幕关闭时启动
+ * - LISTENING -> PAUSED_BY_USER: VoiceInputManager 暂停
+ * - LISTENING -> PAUSED_BY_SCREEN_OFF: 屏幕关闭
+ * - PAUSED_BY_USER -> STARTING: VoiceInputManager 恢复
+ * - PAUSED_BY_SCREEN_OFF -> STARTING: 屏幕打开
+ * - 任意状态 -> STOPPED: 调用 stopListening()
+ * ```
  * 
  * 性能优化点：
  * - 电量优化（降低采样率选项、智能休眠）
@@ -39,6 +74,18 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - 自适应处理间隔
  */
 class ContinuousListeningService : Service() {
+    
+    /**
+     * 服务状态枚举
+     */
+    enum class State {
+        IDLE,                 // 服务已创建但未开始监听
+        STARTING,             // 正在初始化（中间状态）
+        LISTENING,            // 正在监听
+        PAUSED_BY_USER,       // 被 VoiceInputManager 暂停
+        PAUSED_BY_SCREEN_OFF, // 被屏幕关闭暂停
+        STOPPED               // 服务已停止
+    }
     
     companion object {
         private const val TAG = "ContinuousListening"
@@ -77,14 +124,16 @@ class ContinuousListeningService : Service() {
         
         fun getInstance(): ContinuousListeningService? = instance
         
-        fun isRunning(): Boolean = instance?.isListening?.get() == true
+        fun isRunning(): Boolean = instance?.state?.get() == State.LISTENING
+        
+        fun getState(): State = instance?.state?.get() ?: State.STOPPED
         
         /**
          * 暂停监听（释放 AudioRecord，但保持服务运行）
          * 用于在其他组件需要使用麦克风时暂停
          */
         fun pause() {
-            instance?.pauseListening()
+            instance?.pauseByUser()
         }
         
         /**
@@ -92,7 +141,7 @@ class ContinuousListeningService : Service() {
          * 在其他组件释放麦克风后调用
          */
         fun resume() {
-            instance?.resumeListening()
+            instance?.resumeFromUser()
         }
         
         fun start(context: Context) {
@@ -115,9 +164,9 @@ class ContinuousListeningService : Service() {
     }
     
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val isListening = AtomicBoolean(false)
-    private val isStarting = AtomicBoolean(false)
-    private val isPaused = AtomicBoolean(false)
+    
+    // 状态机：使用单一状态变量管理所有状态
+    private val state = AtomicReference(State.IDLE)
     
     private var audioRecord: AudioRecord? = null
     private var recognizer: SherpaOnnxRecognizer? = null
@@ -231,7 +280,8 @@ class ContinuousListeningService : Service() {
                     Intent.ACTION_USER_PRESENT -> {
                         // 用户解锁后
                         Logger.i(TAG, "User present (unlocked), ensuring listening is active")
-                        if (!isListening.get() && !isPaused.get()) {
+                        val currentState = state.get()
+                        if (currentState == State.PAUSED_BY_SCREEN_OFF) {
                             resumeListeningForScreenOn()
                         }
                     }
@@ -267,36 +317,46 @@ class ContinuousListeningService : Service() {
      * 屏幕关闭时暂停监听
      */
     private fun pauseListeningForScreenOff() {
-        if (!isListening.get()) {
-            Logger.d(TAG, "Not listening, skip pause for screen off")
+        val currentState = state.get()
+        if (currentState != State.LISTENING) {
+            Logger.d(TAG, "Cannot pause for screen off: current state is $currentState")
             return
         }
         
         Logger.i(TAG, "[Performance] Pausing listening due to screen off")
-        pauseListening()
+        
+        // 状态转换: LISTENING -> PAUSED_BY_SCREEN_OFF
+        if (!state.compareAndSet(State.LISTENING, State.PAUSED_BY_SCREEN_OFF)) {
+            Logger.w(TAG, "State changed during pause for screen off")
+            return
+        }
+        
+        // 停止并释放 AudioRecord
+        releaseAudioRecord()
         
         // 释放 WakeLock 节省电量
         KeepAliveManager.releaseListeningWakeLock()
-        
-        updateNotification(getString(R.string.voice_listening_active) + " (屏幕关闭)")
     }
     
     /**
      * 屏幕打开时恢复监听
      */
     private fun resumeListeningForScreenOn() {
-        if (isListening.get()) {
-            Logger.d(TAG, "Already listening, skip resume for screen on")
-            return
-        }
+        val currentState = state.get()
         
-        // 如果是被 VoiceInputManager 暂停的，不要恢复（让 VoiceInputManager 自己恢复）
-        if (isPaused.get()) {
-            Logger.d(TAG, "Paused by VoiceInputManager, skip resume for screen on")
+        // 只有在屏幕关闭暂停状态下才恢复
+        if (currentState != State.PAUSED_BY_SCREEN_OFF) {
+            Logger.d(TAG, "Cannot resume for screen on: current state is $currentState")
             return
         }
         
         Logger.i(TAG, "[Performance] Resuming listening due to screen on")
+        
+        // 状态转换: PAUSED_BY_SCREEN_OFF -> STARTING
+        if (!state.compareAndSet(State.PAUSED_BY_SCREEN_OFF, State.STARTING)) {
+            Logger.w(TAG, "State changed during resume for screen on")
+            return
+        }
         
         // 重新获取 WakeLock
         KeepAliveManager.acquireListeningWakeLock(this)
@@ -307,6 +367,7 @@ class ContinuousListeningService : Service() {
                 if (recognizer == null || !recognizer!!.isInitialized()) {
                     if (!initializeRecognizer()) {
                         Logger.e(TAG, "Failed to reinitialize recognizer on screen on")
+                        state.set(State.IDLE)
                         return@launch
                     }
                 }
@@ -315,35 +376,50 @@ class ContinuousListeningService : Service() {
                 startListeningInternal()
             } catch (e: Exception) {
                 Logger.e(TAG, "Error resuming listening on screen on", e)
+                state.set(State.IDLE)
             }
         }
-        
-        updateNotification(getString(R.string.voice_listening_active))
     }
     
     private fun startListening() {
-        if (isListening.get()) {
-            Logger.w(TAG, "Already listening, ignoring start request")
-            return
+        val currentState = state.get()
+        
+        // 检查是否可以启动
+        when (currentState) {
+            State.LISTENING -> {
+                Logger.w(TAG, "Already listening, ignoring start request")
+                return
+            }
+            State.STARTING -> {
+                Logger.w(TAG, "Already starting, ignoring duplicate start request")
+                return
+            }
+            State.PAUSED_BY_USER, State.PAUSED_BY_SCREEN_OFF -> {
+                // 从暂停状态启动，需要先恢复
+                Logger.d(TAG, "Starting from paused state: $currentState")
+            }
+            State.IDLE, State.STOPPED -> {
+                // 正常启动
+            }
         }
         
-        // Prevent duplicate starts during initialization
-        if (!isStarting.compareAndSet(false, true)) {
-            Logger.w(TAG, "Already starting, ignoring duplicate start request")
+        // 状态转换 -> STARTING
+        if (!state.compareAndSet(currentState, State.STARTING)) {
+            Logger.w(TAG, "State changed during start, aborting")
             return
         }
         
         if (!modelManager.isModelDownloaded()) {
             Logger.e(TAG, "Model not downloaded, cannot start listening")
-            isStarting.set(false)
+            state.set(State.STOPPED)
             stopSelf()
             return
         }
         
-        // 如果屏幕关闭，不启动监听
+        // 如果屏幕关闭，不启动监听，但标记为屏幕关闭暂停状态
         if (!isScreenOn) {
             Logger.i(TAG, "Screen is off, not starting listening")
-            isStarting.set(false)
+            state.set(State.PAUSED_BY_SCREEN_OFF)
             startForeground(NOTIFICATION_ID, createNotification(getString(R.string.voice_listening_active) + " (屏幕关闭)"))
             return
         }
@@ -357,7 +433,7 @@ class ContinuousListeningService : Service() {
                 val initStartTime = System.currentTimeMillis()
                 if (!initializeRecognizer()) {
                     Logger.e(TAG, "Failed to initialize recognizer")
-                    isStarting.set(false)
+                    state.set(State.STOPPED)
                     stopSelf()
                     return@launch
                 }
@@ -368,28 +444,20 @@ class ContinuousListeningService : Service() {
                 
             } catch (e: Exception) {
                 Logger.e(TAG, "Error starting listening", e)
-                isStarting.set(false)
+                state.set(State.STOPPED)
                 stopSelf()
             }
         }
     }
     
     private fun stopListening() {
-        Logger.i(TAG, "[Performance] Stopping continuous listening")
+        Logger.i(TAG, "[Performance] Stopping continuous listening, current state: ${state.get()}")
         logPerformanceStats()
         
-        isListening.set(false)
-        isStarting.set(false)
-        isPaused.set(false)
+        state.set(State.STOPPED)
         listeningJob?.cancel()
         
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (e: Exception) {
-            Logger.e(TAG, "Error stopping AudioRecord", e)
-        }
-        audioRecord = null
+        releaseAudioRecord()
         
         recognizer?.release()
         recognizer = null
@@ -402,41 +470,57 @@ class ContinuousListeningService : Service() {
     }
     
     /**
-     * 暂停监听（释放 AudioRecord，但保持服务和识别器运行）
+     * 释放 AudioRecord 资源
      */
-    private fun pauseListening() {
-        if (!isListening.get() || isPaused.get()) {
-            Logger.d(TAG, "Cannot pause: not listening or already paused")
-            return
-        }
-        
-        Logger.i(TAG, "[Performance] Pausing continuous listening")
-        isPaused.set(true)
-        isListening.set(false)
-        
-        // 停止并释放 AudioRecord，但保持识别器
+    private fun releaseAudioRecord() {
         try {
             audioRecord?.stop()
             audioRecord?.release()
         } catch (e: Exception) {
-            Logger.e(TAG, "Error stopping AudioRecord during pause", e)
+            Logger.e(TAG, "Error stopping AudioRecord", e)
         }
         audioRecord = null
-        
-        updateNotification(getString(R.string.voice_listening_active) + " (已暂停)")
     }
     
     /**
-     * 恢复监听
+     * 被用户（VoiceInputManager）暂停监听
      */
-    private fun resumeListening() {
-        if (!isPaused.get()) {
-            Logger.d(TAG, "Cannot resume: not paused")
+    private fun pauseByUser() {
+        val currentState = state.get()
+        if (currentState != State.LISTENING) {
+            Logger.d(TAG, "Cannot pause by user: current state is $currentState")
             return
         }
         
-        Logger.i(TAG, "[Performance] Resuming continuous listening")
-        isPaused.set(false)
+        Logger.i(TAG, "[Performance] Pausing continuous listening by user")
+        
+        // 状态转换: LISTENING -> PAUSED_BY_USER
+        if (!state.compareAndSet(State.LISTENING, State.PAUSED_BY_USER)) {
+            Logger.w(TAG, "State changed during pause by user")
+            return
+        }
+        
+        // 停止并释放 AudioRecord，但保持识别器
+        releaseAudioRecord()
+    }
+    
+    /**
+     * 从用户暂停状态恢复监听
+     */
+    private fun resumeFromUser() {
+        val currentState = state.get()
+        if (currentState != State.PAUSED_BY_USER) {
+            Logger.d(TAG, "Cannot resume from user: current state is $currentState")
+            return
+        }
+        
+        Logger.i(TAG, "[Performance] Resuming continuous listening from user pause")
+        
+        // 状态转换: PAUSED_BY_USER -> STARTING
+        if (!state.compareAndSet(State.PAUSED_BY_USER, State.STARTING)) {
+            Logger.w(TAG, "State changed during resume from user")
+            return
+        }
         
         // 重新启动监听
         listeningJob = serviceScope.launch {
@@ -445,6 +529,7 @@ class ContinuousListeningService : Service() {
                 if (recognizer == null || !recognizer!!.isInitialized()) {
                     if (!initializeRecognizer()) {
                         Logger.e(TAG, "Failed to reinitialize recognizer on resume")
+                        state.set(State.IDLE)
                         return@launch
                     }
                 }
@@ -455,10 +540,9 @@ class ContinuousListeningService : Service() {
                 startListeningInternal()
             } catch (e: Exception) {
                 Logger.e(TAG, "Error resuming listening", e)
+                state.set(State.IDLE)
             }
         }
-        
-        updateNotification(getString(R.string.voice_listening_active))
     }
     
     private fun checkBatteryStatus() {
@@ -497,7 +581,6 @@ class ContinuousListeningService : Service() {
             isLowPowerMode = true
             currentSampleRate = SAMPLE_RATE_LOW_POWER
             Logger.i(TAG, "[Performance] Low power mode enabled, sample rate: $currentSampleRate")
-            updateNotification(getString(R.string.voice_listening_active) + " (省电模式)")
         }
     }
     
@@ -506,7 +589,6 @@ class ContinuousListeningService : Service() {
             isLowPowerMode = false
             currentSampleRate = SAMPLE_RATE
             Logger.i(TAG, "[Performance] Low power mode disabled, sample rate: $currentSampleRate")
-            updateNotification(getString(R.string.voice_listening_active))
         }
     }
     
@@ -555,8 +637,9 @@ class ContinuousListeningService : Service() {
             }
             
             audioRecord?.startRecording()
-            isListening.set(true)
-            isStarting.set(false)  // Reset starting flag after successful start
+            
+            // 状态转换: STARTING/PAUSED_BY_* -> LISTENING
+            state.set(State.LISTENING)
             Logger.i(TAG, "[Performance] Continuous listening started at ${currentSampleRate}Hz")
             
             val buffer = getOrCreateBuffer(bufferSize / 2)
@@ -572,7 +655,7 @@ class ContinuousListeningService : Service() {
             
             var currentSleepInterval = IDLE_SLEEP_INTERVAL_MS
             
-            while (isListening.get()) {
+            while (state.get() == State.LISTENING) {
                 val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (readSize <= 0) {
                     delay(currentSleepInterval)
@@ -638,8 +721,12 @@ class ContinuousListeningService : Service() {
         } catch (e: Exception) {
             Logger.e(TAG, "Listening error", e)
         } finally {
-            isListening.set(false)
-            isStarting.set(false)
+            // 如果是正常退出循环（状态被改变），不要重置状态
+            // 只有在异常情况下才重置
+            val currentState = state.get()
+            if (currentState == State.LISTENING) {
+                state.set(State.IDLE)
+            }
         }
     }
     
@@ -707,29 +794,6 @@ class ContinuousListeningService : Service() {
             action = ACTION_WAKE_WORD_DETECTED
         }
         startActivity(activityIntent)
-        
-        // 显示通知
-        showWakeWordNotification(wakeWord)
-    }
-    
-    private fun showWakeWordNotification(wakeWord: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🎤 " + getString(R.string.voice_wake_word_detected, wakeWord))
-            .setContentText("正在打开语音输入...")
-            .setSmallIcon(R.drawable.ic_mic)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
-            .build()
-        
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager?.notify(NOTIFICATION_ID + 1, notification)
-        
-        // 3秒后恢复监听状态通知
-        Handler(Looper.getMainLooper()).postDelayed({
-            updateNotification(getString(R.string.voice_listening_active))
-        }, 3000)
     }
     
     private fun logPerformanceStats() {
@@ -750,11 +814,10 @@ class ContinuousListeningService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.voice_continuous_listening),
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = getString(R.string.voice_continuous_listening_desc)
-                setShowBadge(true)
-                enableLights(true)
+                setShowBadge(false)
             }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
@@ -773,15 +836,9 @@ class ContinuousListeningService : Service() {
             .setSmallIcon(R.drawable.ic_mic)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
-    }
-    
-    private fun updateNotification(text: String) {
-        val notification = createNotification(text)
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager?.notify(NOTIFICATION_ID, notification)
     }
 }

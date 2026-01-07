@@ -17,6 +17,13 @@
     <string name="overlay_permission_denied">未授权</string>
     <string name="request_overlay_permission">授权</string>
     
+    <!-- Battery Optimization -->
+    <string name="battery_opt_title">电池优化</string>
+    <string name="battery_opt_ignored">已忽略电池优化</string>
+    <string name="battery_opt_not_ignored">未忽略电池优化</string>
+    <string name="battery_opt_request">去设置</string>
+    <string name="battery_opt_description">忽略电池优化可以让任务在后台更稳定地执行</string>
+    
     <!-- AutoGLM Keyboard -->
     <string name="keyboard_title">输入法</string>
     <string name="keyboard_enabled">已启用</string>
@@ -147,6 +154,7 @@
     <string name="dialog_cancel">取消</string>
     <string name="dialog_choose_option">选择选项</string>
     <string name="dialog_select_option">请选择以下选项之一</string>
+    <string name="cancel">取消</string>
     
     <!-- Takeover Prompt -->
     <string name="takeover_title">需要手动操作</string>
@@ -247,8 +255,8 @@
     <string name="voice_sensitivity_high">高</string>
     <string name="voice_wake_word_helper">多个唤醒词用逗号分隔</string>
     <string name="voice_download_confirm_title">下载语音模型</string>
-    <string name="voice_download_confirm_message">语音识别需要下载离线模型才能使用。模型支持中文、英文、日语、韩语和粤语识别。</string>
-    <string name="voice_download_size_hint">模型大小约 230MB，建议在 WiFi 环境下下载</string>
+    <string name="voice_download_confirm_message">语音识别需要下载离线模型才能使用。模型支持中文和英文识别。</string>
+    <string name="voice_download_size_hint">模型大小约 85MB，建议在 WiFi 环境下下载</string>
     <string name="voice_downloading_title">正在下载语音模型</string>
     <string name="voice_downloading_progress">%1$d%%</string>
     <string name="voice_download_status_preparing">准备下载...</string>
@@ -280,12 +288,15 @@
     
     <!-- Voice Status Messages -->
     <string name="voice_recording_hint">正在聆听，请说话…</string>
-    <string name="voice_recognizing_hint">正在识别...</string>
+    <string name="voice_recognizing_hint">正在识别中...</string>
+    <string name="voice_no_speech_detected">未检测到语音，请重试</string>
+    <string name="voice_result_hint">识别完成，即将执行</string>
     <string name="voice_stop_recording">停止输入</string>
     <string name="voice_auto_run_countdown">%d 秒后自动运行</string>
     <string name="voice_cancel_auto_run">取消</string>
     <string name="voice_confirm_with_countdown">确认 (%d)</string>
     <string name="voice_confirm">确认</string>
+    <string name="voice_retry">重试</string>
     
     <!-- Voice Error Messages -->
     <string name="voice_model_load_failed">语音模型加载失败</string>

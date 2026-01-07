@@ -120,6 +120,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private lateinit var btnVoiceInput: ImageButton
     private var voiceInputManager: VoiceInputManager? = null
     private var isVoiceRecording = false
+    private var voiceRecordingDialog: VoiceRecordingDialog? = null
 
     private val audioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -1526,6 +1527,12 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * 显示语音输入对话框
      */
     private fun showVoiceInputDialog() {
+        // 如果已经有对话框在显示，不重复创建
+        if (voiceRecordingDialog?.isShowing == true) {
+            Logger.d(TAG, "Voice recording dialog already showing, ignoring")
+            return
+        }
+        
         // 初始化语音输入管理器
         if (voiceInputManager == null) {
             voiceInputManager = VoiceInputManager(this)
@@ -1541,10 +1548,11 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         taskInput.setText("")
         
         // 显示语音录音对话框
-        val dialog = VoiceRecordingDialog(
+        voiceRecordingDialog = VoiceRecordingDialog(
             context = this,
             voiceInputManager = voiceInputManager!!,
             onResult = { result ->
+                voiceRecordingDialog = null
                 if (result.text.isNotBlank()) {
                     val currentText = taskInput.text?.toString() ?: ""
                     if (currentText.isBlank()) {
@@ -1559,6 +1567,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 }
             },
             onError = { error ->
+                voiceRecordingDialog = null
                 val errorMsg = when (error) {
                     VoiceError.PermissionDenied -> getString(R.string.voice_permission_denied)
                     VoiceError.ModelNotDownloaded -> getString(R.string.voice_model_not_downloaded)
@@ -1571,7 +1580,10 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 Toast.makeText(this, errorMsg, Toast.LENGTH_SHORT).show()
             }
         )
-        dialog.show()
+        voiceRecordingDialog?.setOnDismissListener {
+            voiceRecordingDialog = null
+        }
+        voiceRecordingDialog?.show()
     }
     
     // endregion

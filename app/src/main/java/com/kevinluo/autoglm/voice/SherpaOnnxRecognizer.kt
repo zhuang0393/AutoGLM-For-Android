@@ -163,14 +163,12 @@ class SherpaOnnxRecognizer(private val context: Context) {
                 
                 val asrLoadStart = System.currentTimeMillis()
                 
-                // 初始化离线识别器（SenseVoice）
+                // 初始化离线识别器（Paraformer 中英双语小模型）
                 // 性能优化：使用 int8 量化模型，减少内存占用
                 val config = OfflineRecognizerConfig(
                     modelConfig = OfflineModelConfig(
-                        senseVoice = OfflineSenseVoiceModelConfig(
-                            model = asrModelFile.absolutePath,
-                            language = "",  // 空字符串表示自动检测语言
-                            useInverseTextNormalization = true
+                        paraformer = OfflineParaformerModelConfig(
+                            model = asrModelFile.absolutePath
                         ),
                         tokens = tokensFile.absolutePath,
                         numThreads = 4,  // 性能优化：根据设备核心数调整
@@ -181,7 +179,7 @@ class SherpaOnnxRecognizer(private val context: Context) {
                 recognizer = OfflineRecognizer(config = config)
                 
                 val asrLoadTime = System.currentTimeMillis() - asrLoadStart
-                Logger.d(TAG, "[Performance] ASR recognizer initialized in ${asrLoadTime}ms")
+                Logger.d(TAG, "[Performance] ASR recognizer (Paraformer) initialized in ${asrLoadTime}ms")
                 
                 // 更新全局缓存
                 cachedRecognizer = recognizer

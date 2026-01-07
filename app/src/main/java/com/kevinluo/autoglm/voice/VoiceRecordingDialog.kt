@@ -8,7 +8,6 @@ import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
@@ -16,13 +15,15 @@ import com.google.android.material.button.MaterialButton
 import com.kevinluo.autoglm.R
 import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.*
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 语音输入对话框
  * 
- * 显示在最上层，带有实时波形显示
- * 识别完成后在同一对话框内展示结果和倒计时
+ * 状态：
+ * - RECORDING: 录音中，显示波形 + "正在聆听，请说话..."
+ * - RECOGNIZING: 识别中，显示 "正在识别中..."
+ * - NO_SPEECH: 未检测到语音，显示 "未检测到语音，请重试"
+ * - RESULT: 识别结果，显示结果文字 + 倒计时确认
  */
 class VoiceRecordingDialog(
     context: Context,
@@ -36,27 +37,29 @@ class VoiceRecordingDialog(
         private const val AUTO_CONFIRM_SECONDS = 5
     }
     
-    private lateinit var waveformView: VoiceWaveformView
-    private lateinit var tvStatus: TextView
-    private lateinit var tvTime: TextView
-    private lateinit var btnStop: MaterialButton
-    private lateinit var ivMic: ImageView
+    /**
+     * 对话框状态
+     */
+    private enum class State {
+        RECORDING,      // 录音中
+        RECOGNIZING,    // 识别中
+        NO_SPEECH,      // 未检测到语音
+        RESULT          // 显示结果
+    }
     
-    // 结果视图
-    private lateinit var recordingContainer: LinearLayout
-    private lateinit var resultContainer: LinearLayout
+    // Views
+    private lateinit var ivMic: ImageView
+    private lateinit var tvStatus: TextView
+    private lateinit var waveformView: VoiceWaveformView
+    private lateinit var progressBar: View
     private lateinit var tvResultText: TextView
-    private lateinit var btnCancel: MaterialButton
-    private lateinit var btnConfirm: MaterialButton
+    private lateinit var btnLeft: MaterialButton
+    private lateinit var btnRight: MaterialButton
     
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val isRecording = AtomicBoolean(false)
-    private var recordingStartTime = 0L
-    private var timerJob: Job? = null
+    private var currentState = State.RECORDING
     private var countdownJob: Job? = null
-    
     private var pendingResult: VoiceRecognitionResult? = null
-    
     private var backPressedCallback: OnBackPressedCallback? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,35 +70,16 @@ class VoiceRecordingDialog(
         setupWindow()
         initViews()
         setupBackPressedCallback()
+        
+        // 开始录音
+        setState(State.RECORDING)
         startRecording()
-    }
-    
-    /**
-     * 设置返回键回调
-     */
-    private fun setupBackPressedCallback() {
-        val activity = context as? ComponentActivity ?: return
-        
-        backPressedCallback = object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (pendingResult != null) {
-                    cancelResult()
-                } else {
-                    voiceInputManager.cancelRecording()
-                    isRecording.set(false)
-                    dismiss()
-                }
-            }
-        }
-        
-        activity.onBackPressedDispatcher.addCallback(backPressedCallback!!)
     }
     
     private fun setupWindow() {
         window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
             setGravity(Gravity.CENTER)
-            
             setType(WindowManager.LayoutParams.TYPE_APPLICATION_PANEL)
             
             val params = attributes
@@ -111,46 +95,128 @@ class VoiceRecordingDialog(
         setCanceledOnTouchOutside(false)
     }
     
+    private fun setupBackPressedCallback() {
+        val activity = context as? ComponentActivity ?: return
+        
+        backPressedCallback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                cleanup()
+                dismiss()
+            }
+        }
+        
+        activity.onBackPressedDispatcher.addCallback(backPressedCallback!!)
+    }
+    
     private fun initViews() {
-        waveformView = findViewById(R.id.waveformView)
-        tvStatus = findViewById(R.id.tvRecordingStatus)
-        tvTime = findViewById(R.id.tvRecordingTime)
-        btnStop = findViewById(R.id.btnStopRecording)
         ivMic = findViewById(R.id.ivMicIcon)
-        
-        recordingContainer = findViewById(R.id.recordingContainer)
-        resultContainer = findViewById(R.id.resultContainer)
+        tvStatus = findViewById(R.id.tvStatus)
+        waveformView = findViewById(R.id.waveformView)
+        progressBar = findViewById(R.id.progressBar)
         tvResultText = findViewById(R.id.tvResultText)
-        btnCancel = findViewById(R.id.btnCancel)
-        btnConfirm = findViewById(R.id.btnConfirm)
+        btnLeft = findViewById(R.id.btnLeft)
+        btnRight = findViewById(R.id.btnRight)
         
-        btnStop.setOnClickListener {
-            stopRecording()
+        btnLeft.setOnClickListener { onLeftButtonClick() }
+        btnRight.setOnClickListener { onRightButtonClick() }
+    }
+    
+    /**
+     * 左按钮点击（取消）
+     */
+    private fun onLeftButtonClick() {
+        cleanup()
+        dismiss()
+    }
+    
+    /**
+     * 右按钮点击（确认/重试）
+     */
+    private fun onRightButtonClick() {
+        when (currentState) {
+            State.RECORDING -> {
+                // 停止录音，进入识别
+                setState(State.RECOGNIZING)
+                voiceInputManager.stopRecording()
+            }
+            State.NO_SPEECH -> {
+                // 重试录音
+                setState(State.RECORDING)
+                startRecording()
+            }
+            State.RESULT -> {
+                // 确认结果
+                confirmResult()
+            }
+            State.RECOGNIZING -> {
+                // 识别中，忽略点击
+            }
         }
+    }
+    
+    /**
+     * 设置状态，更新 UI
+     */
+    private fun setState(state: State) {
+        currentState = state
         
-        btnCancel.setOnClickListener {
-            cancelResult()
-        }
-        
-        btnConfirm.setOnClickListener {
-            confirmResult()
+        when (state) {
+            State.RECORDING -> {
+                tvStatus.text = context.getString(R.string.voice_recording_hint)
+                waveformView.visibility = View.VISIBLE
+                waveformView.reset()
+                progressBar.visibility = View.GONE
+                tvResultText.visibility = View.GONE
+                btnLeft.isEnabled = true
+                btnLeft.text = context.getString(R.string.cancel)
+                btnRight.isEnabled = true
+                btnRight.text = context.getString(R.string.voice_confirm)
+            }
+            State.RECOGNIZING -> {
+                tvStatus.text = context.getString(R.string.voice_recognizing_hint)
+                waveformView.visibility = View.GONE
+                progressBar.visibility = View.VISIBLE
+                tvResultText.visibility = View.GONE
+                btnLeft.isEnabled = false
+                btnRight.isEnabled = false
+            }
+            State.NO_SPEECH -> {
+                tvStatus.text = context.getString(R.string.voice_no_speech_detected)
+                waveformView.visibility = View.GONE
+                progressBar.visibility = View.VISIBLE
+                tvResultText.visibility = View.GONE
+                btnLeft.isEnabled = true
+                btnLeft.text = context.getString(R.string.cancel)
+                btnRight.isEnabled = true
+                btnRight.text = context.getString(R.string.voice_retry)
+            }
+            State.RESULT -> {
+                tvStatus.text = context.getString(R.string.voice_result_hint)
+                waveformView.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                tvResultText.visibility = View.VISIBLE
+                setResultText(pendingResult?.text ?: "")
+                btnLeft.isEnabled = true
+                btnLeft.text = context.getString(R.string.cancel)
+                btnRight.isEnabled = true
+                // 倒计时会更新按钮文字
+            }
         }
     }
     
     private fun startRecording() {
-        isRecording.set(true)
-        recordingStartTime = System.currentTimeMillis()
-        
-        startTimer()
-        
         voiceInputManager.setListener(object : VoiceInputListener {
             override fun onRecordingStarted() {
                 Logger.d(TAG, "Recording started")
             }
             
             override fun onRecordingStopped() {
+                // 状态由 setState 控制，这里不做处理
+            }
+            
+            override fun onNoSpeechDetected() {
                 scope.launch {
-                    tvStatus.text = context.getString(R.string.voice_recognizing_hint)
+                    setState(State.NO_SPEECH)
                 }
             }
             
@@ -160,54 +226,28 @@ class VoiceRecordingDialog(
             
             override fun onFinalResult(result: VoiceRecognitionResult) {
                 scope.launch {
-                    isRecording.set(false)
-                    timerJob?.cancel()
-                    showResult(result)
+                    pendingResult = result
+                    setState(State.RESULT)
+                    startCountdown()
                 }
             }
             
             override fun onError(error: VoiceError) {
                 scope.launch {
-                    isRecording.set(false)
+                    cleanup()
                     dismiss()
                     onError(error)
                 }
             }
             
             override fun onAudioSamples(samples: ShortArray, readSize: Int) {
-                waveformView.updateFromSamples(samples, readSize)
+                if (currentState == State.RECORDING) {
+                    waveformView.updateFromSamples(samples, readSize)
+                }
             }
         })
         
         voiceInputManager.startRecording(scope)
-    }
-    
-    private fun stopRecording() {
-        isRecording.set(false)
-        tvStatus.text = context.getString(R.string.voice_recognizing_hint)
-        btnStop.isEnabled = false
-        voiceInputManager.stopRecording()
-    }
-    
-    private fun showResult(result: VoiceRecognitionResult) {
-        pendingResult = result
-        
-        // 如果没有识别到文字，直接关闭
-        if (result.text.isBlank()) {
-            dismiss()
-            onResult(result)
-            return
-        }
-        
-        // 切换到结果视图
-        recordingContainer.visibility = View.GONE
-        resultContainer.visibility = View.VISIBLE
-        
-        tvStatus.text = context.getString(R.string.voice_input_title)
-        tvResultText.text = result.text
-        
-        // 开始倒计时
-        startCountdown()
     }
     
     private fun startCountdown() {
@@ -215,30 +255,40 @@ class VoiceRecordingDialog(
         updateConfirmButton(secondsLeft)
         
         countdownJob = scope.launch {
-            while (isActive && secondsLeft > 0) {
+            while (isActive && secondsLeft > 0 && currentState == State.RESULT) {
                 delay(1000)
                 secondsLeft--
                 updateConfirmButton(secondsLeft)
             }
             
-            if (isActive && secondsLeft == 0) {
+            if (isActive && secondsLeft == 0 && currentState == State.RESULT) {
                 confirmResult()
             }
         }
     }
     
     private fun updateConfirmButton(secondsLeft: Int) {
-        btnConfirm.text = if (secondsLeft > 0) {
+        btnRight.text = if (secondsLeft > 0) {
             context.getString(R.string.voice_confirm_with_countdown, secondsLeft)
         } else {
             context.getString(R.string.voice_confirm)
         }
     }
     
-    private fun cancelResult() {
-        countdownJob?.cancel()
-        pendingResult = null
-        dismiss()
+    /**
+     * 设置结果文字，根据行数自动调整对齐方式
+     * 单行居中，多行左对齐
+     */
+    private fun setResultText(text: String) {
+        tvResultText.text = text
+        tvResultText.post {
+            val gravity = if (tvResultText.lineCount > 1) {
+                Gravity.START or Gravity.CENTER_VERTICAL
+            } else {
+                Gravity.CENTER
+            }
+            tvResultText.gravity = gravity
+        }
     }
     
     private fun confirmResult() {
@@ -252,22 +302,14 @@ class VoiceRecordingDialog(
         }
     }
     
-    private fun startTimer() {
-        timerJob = scope.launch {
-            while (isActive && isRecording.get()) {
-                val elapsed = System.currentTimeMillis() - recordingStartTime
-                val seconds = (elapsed / 1000) % 60
-                val minutes = (elapsed / 1000) / 60
-                tvTime.text = String.format("%02d:%02d", minutes, seconds)
-                delay(100)
-            }
-        }
+    private fun cleanup() {
+        countdownJob?.cancel()
+        voiceInputManager.cancelRecording()
+        pendingResult = null
     }
     
     override fun dismiss() {
-        isRecording.set(false)
-        timerJob?.cancel()
-        countdownJob?.cancel()
+        cleanup()
         scope.cancel()
         backPressedCallback?.remove()
         super.dismiss()

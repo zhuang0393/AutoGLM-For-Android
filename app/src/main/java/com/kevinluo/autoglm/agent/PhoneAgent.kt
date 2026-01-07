@@ -92,8 +92,6 @@ class PhoneAgent(
     // Private properties
     private val context: AtomicReference<AgentContext?> = AtomicReference(null)
     private val state: AtomicReference<AgentState> = AtomicReference(AgentState.IDLE)
-    private val cancelled: AtomicBoolean = AtomicBoolean(false)
-    private val paused: AtomicBoolean = AtomicBoolean(false)
     private val actionExecuted: AtomicBoolean = AtomicBoolean(false)  // Track if action has been executed in current step
     private var listener: PhoneAgentListener? = null
     private var currentStepNumber: Int = 0
@@ -152,8 +150,6 @@ class PhoneAgent(
         Logger.i(TAG, "Pause requested, current state: ${state.get()}")
         
         if (state.compareAndSet(AgentState.RUNNING, AgentState.PAUSED)) {
-            paused.set(true)
-            
             // Cancel any ongoing model request immediately
             modelClient.cancelCurrentRequest()
             
@@ -178,7 +174,6 @@ class PhoneAgent(
         Logger.i(TAG, "Resume requested, current state: ${state.get()}")
         
         if (state.compareAndSet(AgentState.PAUSED, AgentState.RUNNING)) {
-            paused.set(false)
             Logger.i(TAG, "Task resumed from step $currentStepNumber")
             listener?.onTaskResumed(currentStepNumber)
             return true
@@ -194,7 +189,7 @@ class PhoneAgent(
      * Uses a polling approach with configurable interval.
      */
     private suspend fun waitWhilePaused() {
-        while (paused.get() && !cancelled.get()) {
+        while (state.get() == AgentState.PAUSED) {
             kotlinx.coroutines.delay(PAUSE_CHECK_INTERVAL_MS)
         }
     }
@@ -240,8 +235,6 @@ class PhoneAgent(
             )
         }
         
-        cancelled.set(false)
-        paused.set(false)
         currentStepNumber = 0
         
         // Initialize context with system prompt based on language setting
@@ -268,8 +261,8 @@ class PhoneAgent(
             while (config.maxSteps == 0 || stepCount < config.maxSteps) {
                 ensureActive()
                 
-                if (cancelled.get()) {
-                    state.set(AgentState.CANCELLED)
+                val currentState = state.get()
+                if (currentState == AgentState.CANCELLED) {
                     Logger.i(TAG, "Task cancelled by user at step $stepCount")
                     if (!historyCompleted) {
                         historyManager?.completeTask(false, cancellationMsg)
@@ -295,8 +288,7 @@ class PhoneAgent(
                     waitWhilePaused()
                     
                     // Check if cancelled while paused
-                    if (cancelled.get()) {
-                        state.set(AgentState.CANCELLED)
+                    if (state.get() == AgentState.CANCELLED) {
                         Logger.i(TAG, "Task cancelled while paused")
                         if (!historyCompleted) {
                             historyManager?.completeTask(false, cancellationMsg)
@@ -321,8 +313,7 @@ class PhoneAgent(
                 
                 if (!stepResult.success) {
                     // Check if this failure is due to cancellation
-                    if (cancelled.get()) {
-                        state.set(AgentState.CANCELLED)
+                    if (state.get() == AgentState.CANCELLED) {
                         Logger.i(TAG, "Task cancelled at step $stepCount")
                         if (!historyCompleted) {
                             historyManager?.completeTask(false, cancellationMsg)
@@ -385,8 +376,7 @@ class PhoneAgent(
             )
         } catch (e: Exception) {
             // Always check if cancelled first - user cancellation takes priority over any other error
-            if (cancelled.get()) {
-                state.set(AgentState.CANCELLED)
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled, ignoring exception: ${e.message}")
                 if (!historyCompleted) {
                     historyManager?.completeTask(false, cancellationMsg)
@@ -447,7 +437,7 @@ class PhoneAgent(
         
         try {
             // Check cancellation before any operation
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled at start of step")
                 return StepResult(
                     success = false,
@@ -465,7 +455,7 @@ class PhoneAgent(
             }
             
             // Check cancellation after delay
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled after screenshot delay")
                 return StepResult(
                     success = false,
@@ -477,7 +467,7 @@ class PhoneAgent(
             }
             
             // Check pause after delay - if paused, return to retry this step
-            if (paused.get()) {
+            if (state.get() == AgentState.PAUSED) {
                 Logger.i(TAG, "Task paused before screenshot, will retry step")
                 currentStepNumber--  // Decrement so we retry this step
                 return StepResult(
@@ -498,7 +488,7 @@ class PhoneAgent(
             Logger.logScreenshot(screenshot.width, screenshot.height, screenshot.isSensitive)
             
             // Check cancellation after screenshot
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled after screenshot capture")
                 return StepResult(
                     success = false,
@@ -510,7 +500,7 @@ class PhoneAgent(
             }
             
             // Check pause after screenshot - if paused, discard screenshot and retry
-            if (paused.get()) {
+            if (state.get() == AgentState.PAUSED) {
                 Logger.i(TAG, "Task paused after screenshot, will retry step with fresh screenshot")
                 currentStepNumber--  // Decrement so we retry this step
                 return StepResult(
@@ -542,7 +532,7 @@ class PhoneAgent(
             val modelResult = modelClient.request(ctx.getMessages())
             
             // Check if cancelled after request (request might have been interrupted)
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled during/after model request")
                 return StepResult(
                     success = false,
@@ -554,7 +544,7 @@ class PhoneAgent(
             }
             
             // Check pause after model request - if paused, discard response and retry
-            if (paused.get()) {
+            if (state.get() == AgentState.PAUSED) {
                 Logger.i(TAG, "Task paused during/after model request, will retry step")
                 currentStepNumber--  // Decrement so we retry this step
                 // Remove the user message we just added since we'll retry
@@ -582,7 +572,7 @@ class PhoneAgent(
                     ctx.addAssistantMessage(response.rawContent)
                     
                     // Check again if cancelled before processing action
-                    if (cancelled.get()) {
+                    if (state.get() == AgentState.CANCELLED) {
                         Logger.i(TAG, "Task cancelled before action execution")
                         return StepResult(
                             success = false,
@@ -594,7 +584,7 @@ class PhoneAgent(
                     }
                     
                     // Check pause before action execution - if paused, discard and retry
-                    if (paused.get()) {
+                    if (state.get() == AgentState.PAUSED) {
                         Logger.i(TAG, "Task paused before action execution, will retry step")
                         currentStepNumber--  // Decrement so we retry this step
                         // Remove the messages we just added since we'll retry
@@ -627,12 +617,14 @@ class PhoneAgent(
                             Logger.i(TAG, "Empty action retry $retryCount/$MAX_EMPTY_ACTION_RETRIES")
                             
                             // Check cancellation/pause before retry
-                            if (cancelled.get() || paused.get()) break
+                            val retryState = state.get()
+                            if (retryState == AgentState.CANCELLED || retryState == AgentState.PAUSED) break
                             
                             // Resend the same request (context still has the user message with screenshot)
                             val retryResult = modelClient.request(ctx.getMessages())
                             
-                            if (cancelled.get() || paused.get()) break
+                            val afterRetryState = state.get()
+                            if (afterRetryState == AgentState.CANCELLED || afterRetryState == AgentState.PAUSED) break
                             
                             when (retryResult) {
                                 is ModelResult.Success -> {
@@ -686,7 +678,7 @@ class PhoneAgent(
                 
                 is ModelResult.Error -> {
                     // Check if this error is due to cancellation
-                    if (cancelled.get()) {
+                    if (state.get() == AgentState.CANCELLED) {
                         Logger.i(TAG, "Task cancelled, ignoring model error")
                         return StepResult(
                             success = false,
@@ -698,7 +690,7 @@ class PhoneAgent(
                     }
                     
                     // Check if this error is due to pause (request was cancelled)
-                    if (paused.get()) {
+                    if (state.get() == AgentState.PAUSED) {
                         Logger.i(TAG, "Model request cancelled due to pause, will retry step")
                         currentStepNumber--  // Decrement so we retry this step
                         // Remove the user message we just added since we'll retry
@@ -745,7 +737,7 @@ class PhoneAgent(
             )
         } catch (e: Exception) {
             // Check if exception is due to cancellation
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 Logger.i(TAG, "Task cancelled, exception ignored: ${e.message}")
                 return StepResult(
                     success = false,
@@ -757,7 +749,7 @@ class PhoneAgent(
             }
             
             // Check if exception is due to pause
-            if (paused.get()) {
+            if (state.get() == AgentState.PAUSED) {
                 Logger.i(TAG, "Exception during paused state, will retry step: ${e.message}")
                 currentStepNumber--
                 return StepResult(
@@ -958,11 +950,9 @@ Please re-analyze the current screenshot and output correct coordinates (within 
             val systemPrompt = SystemPrompts.getPrompt(config.language)
             context.set(AgentContext(systemPrompt))
             currentStepNumber = 0
-            // Reset cancelled flag only when starting a new task (first step)
-            cancelled.set(false)
         }
         
-        if (cancelled.get()) {
+        if (state.get() == AgentState.CANCELLED) {
             state.set(AgentState.IDLE)
             return StepResult(
                 success = false,
@@ -986,7 +976,7 @@ Please re-analyze the current screenshot and output correct coordinates (within 
             state.set(AgentState.IDLE)
             
             // Check if cancelled
-            if (cancelled.get()) {
+            if (state.get() == AgentState.CANCELLED) {
                 return StepResult(
                     success = false,
                     finished = true,
@@ -1013,8 +1003,6 @@ Please re-analyze the current screenshot and output correct coordinates (within 
      */
     fun cancel() {
         Logger.i(TAG, "Cancel requested, current state: ${state.get()}")
-        cancelled.set(true)
-        paused.set(false)  // Clear pause flag to unblock waitWhilePaused()
         
         // Try to transition from RUNNING or PAUSED to CANCELLED
         var transitioned = state.compareAndSet(AgentState.RUNNING, AgentState.CANCELLED)
@@ -1041,13 +1029,10 @@ Please re-analyze the current screenshot and output correct coordinates (within 
         // Cancel any ongoing model request
         modelClient.cancelCurrentRequest()
         
-        // Clear state (but NOT the cancelled flag - it's reset at start of run())
+        // Clear state
         context.get()?.reset()
         context.set(null)
         currentStepNumber = 0
-        paused.set(false)  // Reset pause flag
-        // Note: cancelled flag is intentionally NOT reset here
-        // It will be reset at the start of run() to ensure proper cancellation detection
         state.set(AgentState.IDLE)
         
         Logger.i(TAG, "Agent reset complete, state: ${state.get()}")

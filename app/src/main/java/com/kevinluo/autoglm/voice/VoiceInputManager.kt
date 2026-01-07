@@ -323,11 +323,14 @@ class VoiceInputManager(private val context: Context) {
             Logger.d(TAG, "[Performance] Recording finished: ${allSamples.size} samples, ${recordingDuration}ms audio, ${actualRecordingTime}ms wall time")
             
             // 检查是否有足够的语音数据
-            if (!hasSpeech || recordingDuration < MIN_SPEECH_DURATION_MS) {
-                Logger.d(TAG, "No speech detected or too short")
+            val shouldRecognize = hasSpeech && recordingDuration >= MIN_SPEECH_DURATION_MS
+            
+            if (!shouldRecognize) {
+                Logger.d(TAG, "No speech detected or too short (hasSpeech=$hasSpeech, duration=$recordingDuration)")
                 withContext(Dispatchers.Main) {
-                    listener?.onFinalResult(VoiceRecognitionResult(text = "", durationMs = recordingDuration))
+                    listener?.onNoSpeechDetected()
                 }
+                _state.value = VoiceInputState.IDLE
                 return@withContext
             }
             
@@ -417,7 +420,7 @@ class VoiceInputManager(private val context: Context) {
      * 内部停止录音
      */
     private fun stopRecordingInternal() {
-        isRecording.set(false)
+        val wasRecording = isRecording.getAndSet(false)
         
         try {
             audioRecord?.stop()
@@ -435,7 +438,10 @@ class VoiceInputManager(private val context: Context) {
             recordingStartTimeMs = 0
         }
         
-        listener?.onRecordingStopped()
+        // 只在第一次停止时通知 listener
+        if (wasRecording) {
+            listener?.onRecordingStopped()
+        }
         Logger.d(TAG, "Recording stopped")
     }
     

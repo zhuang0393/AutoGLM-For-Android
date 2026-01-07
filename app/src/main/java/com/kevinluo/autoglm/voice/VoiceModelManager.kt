@@ -24,17 +24,17 @@ class VoiceModelManager(private val context: Context) {
     companion object {
         private const val TAG = "VoiceModelManager"
         
-        // 模型下载地址 (ModelScope 中国镜像)
-        private const val SENSE_VOICE_MODEL_URL = 
-            "https://modelscope.cn/models/mariolux/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/model.int8.onnx"
-        private const val SENSE_VOICE_TOKENS_URL = 
-            "https://modelscope.cn/models/mariolux/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/tokens.txt"
+        // 模型下载地址 (HuggingFace 镜像 - Paraformer 中英双语小模型)
+        private const val PARAFORMER_MODEL_URL = 
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-small-2024-03-09/resolve/main/model.int8.onnx"
+        private const val PARAFORMER_TOKENS_URL = 
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-small-2024-03-09/resolve/main/tokens.txt"
         private const val VAD_MODEL_URL = 
             "https://modelscope.cn/models/pengzhendong/silero-vad/resolve/master/silero_vad.onnx"
         
         // 模型目录名
         private const val MODELS_DIR = "sherpa-onnx-models"
-        private const val SENSE_VOICE_DIR = "sense-voice"
+        private const val PARAFORMER_DIR = "paraformer-zh-small"
         private const val VAD_FILE = "silero_vad.onnx"
         
         // 模型文件名
@@ -42,7 +42,7 @@ class VoiceModelManager(private val context: Context) {
         private const val TOKENS_FILE = "tokens.txt"
         
         // 预估模型大小（用于显示）
-        const val ESTIMATED_MODEL_SIZE_MB = 230
+        const val ESTIMATED_MODEL_SIZE_MB = 85
         
         // 性能优化：缓冲区大小
         private const val DOWNLOAD_BUFFER_SIZE = 32 * 1024  // 32KB 下载缓冲区
@@ -54,8 +54,8 @@ class VoiceModelManager(private val context: Context) {
     private val modelsDir: File
         get() = File(context.filesDir, MODELS_DIR)
     
-    private val senseVoiceDir: File
-        get() = File(modelsDir, SENSE_VOICE_DIR)
+    private val paraformerDir: File
+        get() = File(modelsDir, PARAFORMER_DIR)
     
     private val vadFile: File
         get() = File(modelsDir, VAD_FILE)
@@ -67,14 +67,15 @@ class VoiceModelManager(private val context: Context) {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
+        .followSslRedirects(true)  // 支持跨域 HTTPS 重定向
         .build()
     
     /**
      * 检查模型是否已下载
      */
     fun isModelDownloaded(): Boolean {
-        val asrModel = File(senseVoiceDir, ASR_MODEL_FILE)
-        val tokens = File(senseVoiceDir, TOKENS_FILE)
+        val asrModel = File(paraformerDir, ASR_MODEL_FILE)
+        val tokens = File(paraformerDir, TOKENS_FILE)
         return asrModel.exists() && tokens.exists() && vadFile.exists()
     }
     
@@ -82,7 +83,7 @@ class VoiceModelManager(private val context: Context) {
      * 获取模型路径
      */
     fun getModelPath(): String? {
-        return if (isModelDownloaded()) senseVoiceDir.absolutePath else null
+        return if (isModelDownloaded()) paraformerDir.absolutePath else null
     }
     
     /**
@@ -98,7 +99,7 @@ class VoiceModelManager(private val context: Context) {
     fun getDownloadedModelSizeMB(): Long {
         if (!isModelDownloaded()) return 0
         var totalSize = 0L
-        senseVoiceDir.walkTopDown().forEach { file ->
+        paraformerDir.walkTopDown().forEach { file ->
             if (file.isFile) totalSize += file.length()
         }
         totalSize += vadFile.length()
@@ -123,11 +124,11 @@ class VoiceModelManager(private val context: Context) {
             
             try {
                 listener.onDownloadStarted()
-                Logger.i(TAG, "[Performance] Starting model download from hf-mirror.com")
+                Logger.i(TAG, "[Performance] Starting model download from hf-mirror.com (Paraformer zh-small)")
                 
                 // 创建模型目录
                 modelsDir.mkdirs()
-                senseVoiceDir.mkdirs()
+                paraformerDir.mkdirs()
                 
                 // 下载 VAD 模型（较小，先下载）
                 Logger.d(TAG, "[Performance] Downloading VAD model...")
@@ -142,10 +143,10 @@ class VoiceModelManager(private val context: Context) {
                 }
                 
                 // 下载 ASR 模型文件
-                Logger.d(TAG, "[Performance] Downloading ASR model...")
+                Logger.d(TAG, "[Performance] Downloading Paraformer ASR model...")
                 val asrStartTime = System.currentTimeMillis()
-                val asrModelFile = File(senseVoiceDir, ASR_MODEL_FILE)
-                downloadFileWithResume(SENSE_VOICE_MODEL_URL, asrModelFile, listener, 5, 85)
+                val asrModelFile = File(paraformerDir, ASR_MODEL_FILE)
+                downloadFileWithResume(PARAFORMER_MODEL_URL, asrModelFile, listener, 5, 85)
                 val asrDownloadTime = System.currentTimeMillis() - asrStartTime
                 Logger.d(TAG, "[Performance] ASR model downloaded in ${asrDownloadTime}ms (${asrModelFile.length() / 1024 / 1024}MB)")
                 
@@ -156,8 +157,8 @@ class VoiceModelManager(private val context: Context) {
                 
                 // 下载 tokens 文件
                 Logger.d(TAG, "[Performance] Downloading tokens file...")
-                val tokensFile = File(senseVoiceDir, TOKENS_FILE)
-                downloadFileWithResume(SENSE_VOICE_TOKENS_URL, tokensFile, listener, 85, 95)
+                val tokensFile = File(paraformerDir, TOKENS_FILE)
+                downloadFileWithResume(PARAFORMER_TOKENS_URL, tokensFile, listener, 85, 95)
                 Logger.d(TAG, "[Performance] Tokens file downloaded")
                 
                 // 验证模型文件
@@ -166,10 +167,10 @@ class VoiceModelManager(private val context: Context) {
                 }
                 
                 val totalTime = System.currentTimeMillis() - downloadStartTime
-                Logger.i(TAG, "[Performance] Model download completed in ${totalTime}ms")
+                Logger.i(TAG, "[Performance] Paraformer model download completed in ${totalTime}ms")
                 
                 listener.onDownloadProgress(100, 0, 100)
-                listener.onDownloadCompleted(senseVoiceDir.absolutePath)
+                listener.onDownloadCompleted(paraformerDir.absolutePath)
                 
             } catch (e: CancellationException) {
                 Logger.d(TAG, "Download cancelled")
@@ -349,7 +350,7 @@ class VoiceModelManager(private val context: Context) {
      * @return 已下载的字节数，如果没有未完成的下载则返回 0
      */
     fun getResumeProgress(): Long {
-        val asrTempFile = File(senseVoiceDir, "$ASR_MODEL_FILE$TEMP_FILE_SUFFIX")
+        val asrTempFile = File(paraformerDir, "$ASR_MODEL_FILE$TEMP_FILE_SUFFIX")
         return if (asrTempFile.exists()) asrTempFile.length() else 0
     }
     
@@ -357,8 +358,8 @@ class VoiceModelManager(private val context: Context) {
      * 清理未完成的下载
      */
     fun cleanupIncompleteDownload() {
-        val asrTempFile = File(senseVoiceDir, "$ASR_MODEL_FILE$TEMP_FILE_SUFFIX")
-        val tokensTempFile = File(senseVoiceDir, "$TOKENS_FILE$TEMP_FILE_SUFFIX")
+        val asrTempFile = File(paraformerDir, "$ASR_MODEL_FILE$TEMP_FILE_SUFFIX")
+        val tokensTempFile = File(paraformerDir, "$TOKENS_FILE$TEMP_FILE_SUFFIX")
         val vadTempFile = File(vadFile.absolutePath + TEMP_FILE_SUFFIX)
         
         listOf(asrTempFile, tokensTempFile, vadTempFile).forEach { file ->

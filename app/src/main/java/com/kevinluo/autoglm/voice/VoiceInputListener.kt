@@ -12,6 +12,12 @@ interface VoiceInputListener {
     /** Called when recording stops. */
     fun onRecordingStopped()
     
+    /** 
+     * Called when recording stops and no speech was detected.
+     * UI should show retry option instead of "recognizing..." 
+     */
+    fun onNoSpeechDetected() {}
+    
     /** Called with partial recognition results during streaming recognition. */
     fun onPartialResult(text: String)
     
