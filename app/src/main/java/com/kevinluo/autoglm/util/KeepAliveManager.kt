@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.core.content.getSystemService
 import com.kevinluo.autoglm.ui.FloatingWindowService
 import com.kevinluo.autoglm.voice.ContinuousListeningService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,23 +21,23 @@ import kotlinx.coroutines.flow.asStateFlow
  * - WakeLock management during task execution
  */
 object KeepAliveManager {
-    
+
     // 电池优化状态
     private val _batteryOptimizationIgnored = MutableStateFlow(false)
     val batteryOptimizationIgnored: StateFlow<Boolean> = _batteryOptimizationIgnored.asStateFlow()
-    
+
     // 悬浮窗服务状态
     private val _floatingWindowServiceRunning = MutableStateFlow(false)
     val floatingWindowServiceRunning: StateFlow<Boolean> = _floatingWindowServiceRunning.asStateFlow()
-    
+
     // 持续监听服务状态
     private val _continuousListeningServiceRunning = MutableStateFlow(false)
     val continuousListeningServiceRunning: StateFlow<Boolean> = _continuousListeningServiceRunning.asStateFlow()
-    
+
     // WakeLock 引用
     private var wakeLock: PowerManager.WakeLock? = null
     private var listeningWakeLock: PowerManager.WakeLock? = null
-    
+
     /**
      * Checks if the app is ignoring battery optimizations.
      *
@@ -46,12 +45,12 @@ object KeepAliveManager {
      * @return true if battery optimizations are ignored
      */
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-        val powerManager = context.getSystemService<PowerManager>() ?: return false
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
         val ignored = powerManager.isIgnoringBatteryOptimizations(context.packageName)
         _batteryOptimizationIgnored.value = ignored
         return ignored
     }
-    
+
     /**
      * Requests to ignore battery optimizations.
      *
@@ -77,7 +76,7 @@ object KeepAliveManager {
             openBatteryOptimizationSettings(context)
         }
     }
-    
+
     /**
      * Opens battery optimization settings page.
      *
@@ -96,7 +95,7 @@ object KeepAliveManager {
             false
         }
     }
-    
+
     /**
      * Updates service states.
      */
@@ -104,7 +103,7 @@ object KeepAliveManager {
         _floatingWindowServiceRunning.value = FloatingWindowService.getInstance() != null
         _continuousListeningServiceRunning.value = ContinuousListeningService.isRunning()
     }
-    
+
     /**
      * Checks and restores service states.
      *
@@ -113,12 +112,12 @@ object KeepAliveManager {
      * @param shouldContinuousListeningRun Whether continuous listening service should be running
      */
     fun checkAndRestoreServices(
-        context: Context, 
+        context: Context,
         shouldFloatingWindowRun: Boolean,
         shouldContinuousListeningRun: Boolean = false
     ) {
         updateServiceStates()
-        
+
         // 恢复悬浮窗服务
         if (shouldFloatingWindowRun && !_floatingWindowServiceRunning.value) {
             if (FloatingWindowService.canDrawOverlays(context)) {
@@ -126,14 +125,14 @@ object KeepAliveManager {
                 startFloatingWindowService(context)
             }
         }
-        
+
         // 恢复持续监听服务
         if (shouldContinuousListeningRun && !_continuousListeningServiceRunning.value) {
             Logger.i(TAG, "Restoring continuous listening service")
             ContinuousListeningService.start(context)
         }
     }
-    
+
     /**
      * Starts floating window service (regular service, no foreground notification needed).
      */
@@ -146,7 +145,7 @@ object KeepAliveManager {
             Logger.e(TAG, "Failed to start floating window service", e)
         }
     }
-    
+
     /**
      * Acquires WakeLock for task execution.
      *
@@ -159,9 +158,9 @@ object KeepAliveManager {
             Logger.d(TAG, "WakeLock already held")
             return
         }
-        
+
         try {
-            val powerManager = context.getSystemService<PowerManager>() ?: return
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 WAKELOCK_TAG
@@ -173,7 +172,7 @@ object KeepAliveManager {
             Logger.e(TAG, "Failed to acquire WakeLock", e)
         }
     }
-    
+
     /**
      * Releases task execution WakeLock.
      */
@@ -190,7 +189,7 @@ object KeepAliveManager {
             Logger.e(TAG, "Failed to release WakeLock", e)
         }
     }
-    
+
     /**
      * Acquires WakeLock for continuous listening.
      *
@@ -203,9 +202,9 @@ object KeepAliveManager {
             Logger.d(TAG, "Listening WakeLock already held")
             return
         }
-        
+
         try {
-            val powerManager = context.getSystemService<PowerManager>() ?: return
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
             listeningWakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 LISTENING_WAKELOCK_TAG
@@ -218,7 +217,7 @@ object KeepAliveManager {
             Logger.e(TAG, "Failed to acquire Listening WakeLock", e)
         }
     }
-    
+
     /**
      * Releases continuous listening WakeLock.
      */
@@ -235,7 +234,7 @@ object KeepAliveManager {
             Logger.e(TAG, "Failed to release Listening WakeLock", e)
         }
     }
-    
+
     /**
      * Syncs and fixes state.
      *
@@ -245,14 +244,14 @@ object KeepAliveManager {
      */
     fun syncFixState(context: Context) {
         Logger.d(TAG, "Syncing and fixing state")
-        
+
         // 更新电池优化状态
         isIgnoringBatteryOptimizations(context)
-        
+
         // 更新服务状态
         updateServiceStates()
     }
-    
+
     /**
      * Gets state summary for debugging.
      *
@@ -269,7 +268,7 @@ object KeepAliveManager {
             appendLine("  - Listening WakeLock held: ${listeningWakeLock?.isHeld == true}")
         }
     }
-    
+
     // Constants - placed at the bottom following code style guidelines
     private const val TAG = "KeepAliveManager"
     private const val WAKELOCK_TAG = "AutoGLM:TaskExecution"

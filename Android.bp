@@ -1,0 +1,53 @@
+// Android.bp for AutoGLM-For-Android system build
+// This file is used when building the app as part of Android system image
+
+android_app {
+    name: "AutoGLM",
+
+    srcs: [
+        "app/src/main/java/**/*.kt",
+        "app/src/main/aidl/**/*.aidl",
+    ],
+
+    resource_dirs: [
+        "app/src/main/res",
+    ],
+
+    manifest: "app/src/main/AndroidManifest.xml",
+
+    // SDK version for system APIs (vendor/product modules)
+    // Use "system_current" to access system APIs without platform_apis
+    sdk_version: "system_current",
+
+    // Use platform signature for system build
+    certificate: "platform",
+
+    // System app privileges
+    privileged: true,
+
+    // Java libraries - only include libraries available in system source
+    // Note: AndroidX libraries are static libs in system source and cannot be used directly
+    // We'll use standard Android SDK APIs instead
+    libs: [
+        "kotlin-stdlib",
+        // Coroutines are required by app code. Keep them, but disable R8/proguard below to
+        // avoid classpath conflicts seen during minification.
+        "kotlinx-coroutines-android",
+    ],
+
+    // AIDL files - system will auto-detect from srcs
+
+    // Optimize for system build
+    optimize: {
+        // R8/proguard triggers classpath conflicts between Kotlin/coroutines in this
+        // system build environment. Disable minification/optimization to compile.
+        enabled: false,
+    },
+
+    // Minify enabled
+    min_sdk_version: "24",
+    target_sdk_version: "34",
+
+    // Product-specific properties
+    product_specific: true,
+}

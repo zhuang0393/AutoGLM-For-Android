@@ -1,13 +1,13 @@
 package com.kevinluo.autoglm.ui
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.kevinluo.autoglm.ComponentManager
 import com.kevinluo.autoglm.action.AgentAction
 import com.kevinluo.autoglm.agent.PhoneAgentListener
 import com.kevinluo.autoglm.util.Logger
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,28 +68,28 @@ sealed class MainUiEvent {
      * @property messageResId The string resource ID for the message
      */
     data class ShowToast(val messageResId: Int) : MainUiEvent()
-    
+
     /**
      * Event to show a toast message with a text string.
      *
      * @property message The message text to display
      */
     data class ShowToastText(val message: String) : MainUiEvent()
-    
+
     /**
      * Event indicating task completion.
      *
      * @property message The completion message
      */
     data class TaskCompleted(val message: String) : MainUiEvent()
-    
+
     /**
      * Event indicating task failure.
      *
      * @property error The error message
      */
     data class TaskFailed(val error: String) : MainUiEvent()
-    
+
     /** Event to minimize the app. */
     object MinimizeApp : MainUiEvent()
 }
@@ -101,29 +101,32 @@ sealed class MainUiEvent {
  * [PhoneAgentListener] to receive callbacks from the agent during task execution.
  *
  */
-class MainViewModel(application: Application) : AndroidViewModel(application), PhoneAgentListener {
-    
+class MainViewModel(application: Application) : PhoneAgentListener {
+
+    private val applicationContext: Application = application
+    private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     private val componentManager: ComponentManager by lazy {
-        ComponentManager.getInstance(application)
+        ComponentManager.getInstance(applicationContext)
     }
-    
+
     private val _uiState = MutableStateFlow(MainUiState())
-    
+
     /** Observable UI state for the main screen. */
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
-    
+
     private val _events = MutableSharedFlow<MainUiEvent>()
-    
+
     /** Observable stream of one-time UI events. */
     val events = _events.asSharedFlow()
-    
+
     private val _outputLog = MutableStateFlow("")
-    
+
     /** Observable output log for displaying task execution details. */
     val outputLog: StateFlow<String> = _outputLog.asStateFlow()
-    
+
     private val logBuilder = StringBuilder()
-    
+
     /**
      * Updates the Shizuku connection status.
      *
@@ -137,7 +140,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             canStartTask = calculateCanStartTask(status)
         )
     }
-    
+
     /**
      * Updates the overlay permission status.
      *
@@ -151,7 +154,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             canStartTask = calculateCanStartTask(hasOverlayPermission = hasPermission)
         )
     }
-    
+
     /**
      * Updates the task input availability based on whether text is entered.
      *
@@ -163,7 +166,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             canStartTask = calculateCanStartTask(hasTaskText = hasText)
         )
     }
-    
+
     /**
      * Calculates whether a new task can be started based on current state.
      *
@@ -185,7 +188,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
                !isRunning &&
                componentManager.phoneAgent != null
     }
-    
+
     /**
      * Starts a new task with the given description.
      *
@@ -194,17 +197,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
      */
     fun startTask(taskDescription: String) {
         val agent = componentManager.phoneAgent ?: return
-        
+
         if (agent.isRunning()) {
             appendLog("Error: A task is already running")
             Logger.w(TAG, "Attempted to start task while another is running")
             return
         }
-        
+
         // Clear previous output
         logBuilder.clear()
         _outputLog.value = ""
-        
+
         // Update UI state
         _uiState.value = _uiState.value.copy(
             taskStatus = TaskStatus.RUNNING,
@@ -214,17 +217,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             currentAction = "",
             canStartTask = false
         )
-        
+
         Logger.d(TAG, "Starting task: ${taskDescription.take(50)}...")
         appendLog("Starting task: $taskDescription")
-        
+
         viewModelScope.launch {
             // Minimize app
             _events.emit(MainUiEvent.MinimizeApp)
-            
+
             try {
                 val result = agent.run(taskDescription)
-                
+
                 withContext(Dispatchers.Main) {
                     if (result.success) {
                         Logger.i(TAG, "Task completed successfully: ${result.message}")
@@ -260,7 +263,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             }
         }
     }
-    
+
     /**
      * Cancels the currently running task.
      *
@@ -275,7 +278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
         appendLog("Task cancelled by user")
         updateCanStartTask()
     }
-    
+
     /**
      * Updates the canStartTask flag based on current state.
      */
@@ -284,7 +287,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             canStartTask = calculateCanStartTask()
         )
     }
-    
+
     /**
      * Appends a timestamped message to the output log.
      *
@@ -296,9 +299,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
         logBuilder.append("[$timestamp] $message\n")
         _outputLog.value = logBuilder.toString()
     }
-    
+
     // region PhoneAgentListener Implementation
-    
+
     /**
      * Called when a new step starts in the task execution.
      *
@@ -312,7 +315,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             appendLog("Step $stepNumber started")
         }
     }
-    
+
     /**
      * Called when the model's thinking text is updated.
      *
@@ -327,7 +330,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             }
         }
     }
-    
+
     /**
      * Called when an action is executed.
      *
@@ -341,7 +344,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             appendLog("Action: ${action.formatForDisplay()}")
         }
     }
-    
+
     /**
      * Called when the task completes successfully.
      *
@@ -359,7 +362,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             updateCanStartTask()
         }
     }
-    
+
     /**
      * Called when the task fails.
      *
@@ -377,7 +380,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
             updateCanStartTask()
         }
     }
-    
+
     /**
      * Called when screenshot capture starts.
      *
@@ -387,7 +390,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
     override fun onScreenshotStarted() {
         // Handled by FloatingWindowService
     }
-    
+
     /**
      * Called when screenshot capture completes.
      *
@@ -397,7 +400,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
     override fun onScreenshotCompleted() {
         // Handled by FloatingWindowService
     }
-    
+
     /**
      * Called when the floating window needs to be refreshed.
      *
@@ -406,9 +409,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), P
         Logger.d(TAG, "Floating window refresh needed")
         FloatingWindowService.getInstance()?.bringToFront()
     }
-    
+
     // endregion
-    
+
     companion object {
         private const val TAG = "MainViewModel"
     }

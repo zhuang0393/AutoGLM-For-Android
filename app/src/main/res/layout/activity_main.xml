@@ -31,19 +31,19 @@
             android:id="@+id/floatingWindowBtn"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/floating_open"
             android:src="@drawable/ic_layers"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
         <ImageButton
             android:id="@+id/settingsBtn"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/settings_title"
             android:src="@drawable/ic_settings"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
     </LinearLayout>
 
@@ -60,13 +60,11 @@
             android:paddingBottom="32dp">
 
             <!-- Shizuku Status Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -86,7 +84,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_check_circle"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Status" />
 
                         <LinearLayout
@@ -134,7 +132,7 @@
                         android:orientation="horizontal">
 
                         <!-- Open Shizuku Button -->
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/openShizukuBtn"
                             style="@style/Widget.App.Button.Tonal.Large"
                             android:layout_width="wrap_content"
@@ -142,36 +140,34 @@
                             android:layout_marginEnd="8dp"
                             android:visibility="gone"
                             android:text="@string/open_shizuku"
-                            app:icon="@drawable/ic_play"
-                            app:iconGravity="textStart"
-                            app:iconPadding="8dp" />
+                            android:drawableStart="@drawable/ic_play"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical|start" />
 
                         <!-- Request Permission Button -->
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/requestPermissionBtn"
                             style="@style/Widget.App.Button.Tonal.Large"
                             android:layout_width="wrap_content"
                             android:layout_height="52dp"
                             android:text="@string/request_shizuku_permission"
-                            app:icon="@drawable/ic_link"
-                            app:iconGravity="textStart"
-                            app:iconPadding="8dp" />
+                            android:drawableStart="@drawable/ic_link"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical|start" />
 
                     </LinearLayout>
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Overlay Permission Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:id="@+id/overlayPermissionCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -191,7 +187,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_layers"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Overlay" />
 
                         <LinearLayout
@@ -222,30 +218,28 @@
                     </LinearLayout>
 
                     <!-- Request Overlay Permission Button -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/requestOverlayBtn"
                         style="@style/Widget.App.Button.Tonal.Large"
                         android:layout_width="wrap_content"
                         android:layout_height="52dp"
                         android:layout_marginTop="12dp"
                         android:text="@string/request_overlay_permission"
-                        app:icon="@drawable/ic_layers"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp" />
+                        android:drawableStart="@drawable/ic_layers"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Keyboard Status Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:id="@+id/keyboardCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -265,7 +259,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_keyboard"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Keyboard" />
 
                         <LinearLayout
@@ -296,30 +290,28 @@
                     </LinearLayout>
 
                     <!-- Enable Button inside card -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/enableKeyboardBtn"
                         style="@style/Widget.App.Button.Tonal.Large"
                         android:layout_width="wrap_content"
                         android:layout_height="52dp"
                         android:layout_marginTop="12dp"
                         android:text="@string/enable_keyboard"
-                        app:icon="@drawable/ic_keyboard"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp" />
+                        android:drawableStart="@drawable/ic_keyboard"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Battery Optimization Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:id="@+id/batteryOptCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -339,7 +331,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_battery"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Battery" />
 
                         <LinearLayout
@@ -370,33 +362,31 @@
                     </LinearLayout>
 
                     <!-- Request Button inside card -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/requestBatteryOptBtn"
                         style="@style/Widget.App.Button.Tonal.Large"
                         android:layout_width="wrap_content"
                         android:layout_height="52dp"
                         android:layout_marginTop="12dp"
                         android:text="@string/battery_opt_request"
-                        app:icon="@drawable/ic_battery"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp" />
+                        android:drawableStart="@drawable/ic_battery"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- History Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:id="@+id/historyBtn"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="24dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:foreground="?android:attr/selectableItemBackground"
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -409,7 +399,7 @@
                         android:layout_width="40dp"
                         android:layout_height="40dp"
                         android:src="@drawable/ic_history"
-                        app:tint="@color/icon_primary"
+                        android:tint="@color/icon_primary"
                         android:contentDescription="@string/history_title" />
 
                     <TextView
@@ -425,21 +415,19 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:src="@drawable/ic_chevron_right"
-                        app:tint="@color/icon_secondary"
+                        android:tint="@color/icon_secondary"
                         android:contentDescription="@string/history_title" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Task Input Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -457,7 +445,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_edit"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Task" />
 
                         <TextView
@@ -473,32 +461,32 @@
                             android:id="@+id/btnVoiceInput"
                             android:layout_width="40dp"
                             android:layout_height="40dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/voice_input_title"
                             android:src="@drawable/ic_mic"
-                            app:tint="@color/icon_secondary" />
+                            android:tint="@color/icon_secondary" />
 
                         <ImageButton
                             android:id="@+id/btnSelectTemplate"
                             android:layout_width="40dp"
                             android:layout_height="40dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/task_select_template"
                             android:src="@drawable/ic_list"
-                            app:tint="@color/icon_secondary" />
+                            android:tint="@color/icon_secondary" />
 
                     </LinearLayout>
 
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/taskInputLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:hint="@string/task_input_hint"
-                        app:boxBackgroundColor="@color/surface_variant">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="16dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <EditText
                             android:id="@+id/taskInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -509,10 +497,10 @@
                             android:textColor="@color/text_primary"
                             android:textSize="15sp" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Start Button inside card -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/startTaskBtn"
                         style="@style/Widget.App.Button.Tonal.Large"
                         android:layout_width="wrap_content"
@@ -520,13 +508,13 @@
                         android:layout_marginTop="12dp"
                         android:enabled="false"
                         android:text="@string/start_task"
-                        app:icon="@drawable/ic_play"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp" />
+                        android:drawableStart="@drawable/ic_play"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Running Section - shown when task is running -->
             <LinearLayout
@@ -537,13 +525,11 @@
                 android:visibility="gone">
 
                 <!-- Task Status Card -->
-                <com.google.android.material.card.MaterialCardView
+                <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardBackgroundColor="@color/card_background"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp">
+                    android:background="@color/card_background">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -558,7 +544,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_status"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Task Status" />
 
                         <LinearLayout
@@ -597,19 +583,19 @@
 
                     </LinearLayout>
 
-                </com.google.android.material.card.MaterialCardView>
+                </FrameLayout>
 
                 <!-- Cancel Button -->
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/cancelTaskBtn"
                     style="@style/Widget.App.Button.Tonal.Large"
                     android:layout_width="wrap_content"
                     android:layout_height="52dp"
                     android:enabled="false"
                     android:text="@string/cancel_task"
-                    app:icon="@drawable/ic_stop"
-                    app:iconGravity="textStart"
-                    app:iconPadding="8dp" />
+                    android:drawableStart="@drawable/ic_stop"
+                    android:drawablePadding="8dp"
+                    android:gravity="center_vertical|start" />
 
             </LinearLayout>
 

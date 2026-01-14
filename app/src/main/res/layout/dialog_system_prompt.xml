@@ -18,15 +18,23 @@
         android:textSize="12sp" />
 
     <!-- Prompt Input -->
-    <com.google.android.material.textfield.TextInputLayout
+    <LinearLayout
         android:id="@+id/promptInputLayout"
-        style="@style/Widget.App.TextInputLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/settings_system_prompt"
-        app:boxBackgroundColor="@color/surface_variant">
+        android:orientation="vertical"
+        android:background="@color/surface_variant"
+        android:padding="12dp">
 
-        <com.google.android.material.textfield.TextInputEditText
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_system_prompt_hint"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
             android:id="@+id/promptInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -36,14 +44,15 @@
             android:minLines="8"
             android:textColor="@color/text_primary"
             android:textSize="13sp"
-            android:fontFamily="monospace" />
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent" />
 
-    </com.google.android.material.textfield.TextInputLayout>
+    </LinearLayout>
 
     <!-- Reset Button -->
-    <com.google.android.material.button.MaterialButton
+    <Button
         android:id="@+id/btnResetPrompt"
-        style="@style/Widget.Material3.Button.TextButton"
+        style="@style/Widget.App.Button.Text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"

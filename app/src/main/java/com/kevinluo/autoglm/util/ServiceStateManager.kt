@@ -2,7 +2,6 @@ package com.kevinluo.autoglm.util
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.core.content.edit
 
 /**
  * Service state persistence manager.
@@ -11,11 +10,11 @@ import androidx.core.content.edit
  * automatically restored after app restart.
  */
 object ServiceStateManager {
-    
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
-    
+
     /**
      * Sets whether floating window service should be running.
      *
@@ -23,11 +22,9 @@ object ServiceStateManager {
      * @param enabled Whether the service should be enabled
      */
     fun setFloatingWindowEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit {
-            putBoolean(KEY_FLOATING_WINDOW_ENABLED, enabled)
-        }
+        getPrefs(context).edit().putBoolean(KEY_FLOATING_WINDOW_ENABLED, enabled).apply()
     }
-    
+
     /**
      * Gets whether floating window service should be running.
      *
@@ -37,18 +34,16 @@ object ServiceStateManager {
     fun isFloatingWindowEnabled(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_FLOATING_WINDOW_ENABLED, false)
     }
-    
+
     /**
      * Records the last task execution time.
      *
      * @param context Application context
      */
     fun recordTaskExecution(context: Context) {
-        getPrefs(context).edit {
-            putLong(KEY_LAST_TASK_TIME, System.currentTimeMillis())
-        }
+        getPrefs(context).edit().putLong(KEY_LAST_TASK_TIME, System.currentTimeMillis()).apply()
     }
-    
+
     /**
      * Gets the last task execution time.
      *
@@ -58,7 +53,7 @@ object ServiceStateManager {
     fun getLastTaskTime(context: Context): Long {
         return getPrefs(context).getLong(KEY_LAST_TASK_TIME, 0)
     }
-    
+
     /**
      * Checks if there was a recent task execution (within 1 hour).
      *
@@ -69,7 +64,7 @@ object ServiceStateManager {
         val lastTime = getLastTaskTime(context)
         return System.currentTimeMillis() - lastTime < 60 * 60 * 1000
     }
-    
+
     // Constants - placed at the bottom following code style guidelines
     private const val PREFS_NAME = "autoglm_service_state"
     private const val KEY_FLOATING_WINDOW_ENABLED = "floating_window_enabled"

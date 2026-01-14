@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="280dp"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="@color/dialog_background"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="8dp">
+    android:background="@color/dialog_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -20,7 +18,7 @@
             android:layout_height="40dp"
             android:layout_gravity="center_horizontal"
             android:src="@drawable/ic_touch"
-            app:tint="@color/status_waiting"
+            android:tint="@color/status_waiting"
             android:contentDescription="Manual Action" />
 
         <!-- Title -->
@@ -59,15 +57,15 @@
             android:lineSpacingMultiplier="1.2" />
 
         <!-- Continue button -->
-        <com.google.android.material.button.MaterialButton
+        <Button
             android:id="@+id/btn_continue"
             style="@style/Widget.App.Button.Tonal"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="16dp"
             android:text="@string/takeover_continue"
-            app:icon="@drawable/ic_check"
-            app:iconGravity="textStart"
-            app:iconPadding="8dp" />
+            android:drawableStart="@drawable/ic_check"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical|start" />
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+</FrameLayout>

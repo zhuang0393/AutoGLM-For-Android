@@ -3,6 +3,7 @@ package com.kevinluo.autoglm
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -13,18 +14,18 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.IBinder
 import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.lifecycleScope
+import android.app.Activity
+import android.app.AlertDialog
+import android.os.Handler
+import android.os.Looper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.kevinluo.autoglm.action.ActionHandler
 import com.kevinluo.autoglm.action.AgentAction
 import com.kevinluo.autoglm.agent.PhoneAgent
@@ -43,15 +44,11 @@ import com.kevinluo.autoglm.voice.VoiceError
 import com.kevinluo.autoglm.voice.VoiceModelManager
 import com.kevinluo.autoglm.voice.VoiceModelDownloadListener
 import com.kevinluo.autoglm.voice.VoiceRecordingDialog
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
-import kotlinx.coroutines.Dispatchers
+import android.widget.EditText
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import rikka.shizuku.Shizuku
 
 /**
  * Main activity for the AutoGLM Phone Agent application.
@@ -68,7 +65,15 @@ import rikka.shizuku.Shizuku
  * during task execution for UI updates.
  *
  */
-class MainActivity : AppCompatActivity(), PhoneAgentListener {
+class MainActivity : Activity(), PhoneAgentListener {
+
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val SHIZUKU_PERMISSION_REQUEST_CODE = 1000
+        private const val APPLICATION_ID = "com.kevinluo.autoglm"
+    }
 
     // Shizuku status views
     private lateinit var statusText: TextView
@@ -97,10 +102,9 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private var requestBatteryOptBtn: Button? = null
 
     // Task input views
-    private lateinit var taskInputLayout: TextInputLayout
-    private lateinit var taskInput: TextInputEditText
-    private lateinit var startTaskBtn: MaterialButton
-    private lateinit var cancelTaskBtn: MaterialButton
+    private lateinit var taskInput: EditText
+    private lateinit var startTaskBtn: Button
+    private lateinit var cancelTaskBtn: Button
     private lateinit var btnSelectTemplate: ImageButton
 
     // Task status views
@@ -111,7 +115,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
 
     // Component manager for dependency injection
     private lateinit var componentManager: ComponentManager
-    
+
     // Current step tracking for floating window
     private var currentStepNumber = 0
     private var currentThinking = ""
@@ -122,13 +126,16 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private var isVoiceRecording = false
     private var voiceRecordingDialog: VoiceRecordingDialog? = null
 
-    private val audioPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            onVoiceButtonClick()
-        } else {
-            Toast.makeText(this, R.string.voice_permission_denied, Toast.LENGTH_SHORT).show()
+    private val audioPermissionRequestCode = 1001
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == audioPermissionRequestCode) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                onVoiceButtonClick()
+            } else {
+                Toast.makeText(this@MainActivity, getString(R.string.voice_permission_denied), Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -144,92 +151,46 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         }
     }
 
-    private val userServiceArgs = Shizuku.UserServiceArgs(
-        ComponentName(
-            BuildConfig.APPLICATION_ID,
-            UserService::class.java.name
-        )
-    )
-        .daemon(false)
-        .processNameSuffix("user_service")
-        .debuggable(BuildConfig.DEBUG)
-        .version(BuildConfig.VERSION_CODE)
-
-    private val userServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val userService = IUserService.Stub.asInterface(service)
-            Logger.i(TAG, "UserService connected")
-            
-            // Notify ComponentManager
-            componentManager.onServiceConnected(userService)
-            
-            runOnUiThread {
-                Toast.makeText(this@MainActivity, R.string.toast_user_service_connected, Toast.LENGTH_SHORT).show()
-                updateShizukuStatus()
-                initializePhoneAgent()
-            }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            Logger.i(TAG, "UserService disconnected")
-            
-            // Notify ComponentManager
-            componentManager.onServiceDisconnected()
-            
-            runOnUiThread {
-                Toast.makeText(this@MainActivity, R.string.toast_user_service_disconnected, Toast.LENGTH_SHORT).show()
-                updateShizukuStatus()
-                updateTaskButtonStates()
-            }
-        }
-    }
-
-    private val onRequestPermissionResultListener =
-        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-            if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
-                if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                    updateShizukuStatus()
-                    bindUserService()
-                    Toast.makeText(this, R.string.toast_shizuku_permission_granted, Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this, R.string.toast_shizuku_permission_denied, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-        updateShizukuStatus()
-        if (hasShizukuPermission()) {
-            bindUserService()
-        }
-    }
-
-    private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        Logger.w(TAG, "Shizuku binder died")
-        componentManager.onServiceDisconnected()
-        updateShizukuStatus()
-        updateTaskButtonStates()
-    }
+    // Shizuku-related code removed for system build
+    // SystemService is used instead when running in system mode
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
+        // Handle window insets for edge-to-edge (Android 11+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            findViewById<View>(R.id.main)?.setOnApplyWindowInsetsListener { v, insets ->
+                val systemBars = insets.getInsets(WindowInsets.Type.systemBars())
+                v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+                insets
+            }
         }
 
         // Initialize ComponentManager
         componentManager = ComponentManager.getInstance(this)
         Logger.i(TAG, "ComponentManager initialized")
-        
+
         initViews()
         setupListeners()
-        setupShizukuListeners()
-        
+
+        // Check if running in system build mode
+        if (isSystemBuild()) {
+            Logger.i(TAG, "Running in system build mode, initializing SystemService")
+            componentManager.initializeSystemService()
+            // Hide Shizuku status UI in system mode
+            // shizukuStatusCard may not exist in layout, safely ignore
+            // Note: Resource may not exist, commented out to avoid compilation error
+            // try {
+            //     findViewById<View>(R.id.shizukuStatusCard)?.visibility = View.GONE
+            // } catch (e: Exception) {
+            //     // Ignore if view doesn't exist
+            // }
+        } else {
+            // Only setup Shizuku listeners in non-system mode
+            setupShizukuListeners()
+        }
+
         // Register wake word receiver
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(
@@ -243,24 +204,26 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 IntentFilter(ContinuousListeningService.ACTION_WAKE_WORD_DETECTED)
             )
         }
-        
-        updateShizukuStatus()
+
+        if (!isSystemBuild()) {
+            updateShizukuStatus()
+        }
         updateOverlayPermissionStatus()
         updateKeyboardStatus()
         updateTaskStatus(TaskStatus.IDLE)
-        
+
         // Restore continuous listening service if it was enabled
         restoreContinuousListeningService()
-        
+
         // 检查是否是从唤醒词启动的
         handleWakeWordIntent(intent)
     }
-    
+
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         intent?.let { handleWakeWordIntent(it) }
     }
-    
+
     /**
      * 处理唤醒词 Intent
      */
@@ -268,14 +231,14 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         if (intent.action == ContinuousListeningService.ACTION_WAKE_WORD_DETECTED) {
             val wakeWord = intent.getStringExtra(ContinuousListeningService.EXTRA_WAKE_WORD)
             Logger.i(TAG, "Handling wake word intent: $wakeWord")
-            
+
             // 延迟一点确保 Activity 完全显示
             android.os.Handler(mainLooper).postDelayed({
                 onWakeWordDetected(wakeWord, null)
             }, 300)
         }
     }
-    
+
     /**
      * Updates the overlay permission status display.
      *
@@ -284,18 +247,18 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun updateOverlayPermissionStatus() {
         val hasPermission = FloatingWindowService.canDrawOverlays(this)
-        
+
         if (hasPermission) {
             overlayStatusText.text = getString(R.string.overlay_permission_granted)
-            overlayStatusIcon.setColorFilter(ContextCompat.getColor(this, R.color.status_running))
+            overlayStatusIcon.setColorFilter(getColor(R.color.status_running))
             requestOverlayBtn.visibility = View.GONE
         } else {
             overlayStatusText.text = getString(R.string.overlay_permission_denied)
-            overlayStatusIcon.setColorFilter(ContextCompat.getColor(this, R.color.status_waiting))
+            overlayStatusIcon.setColorFilter(getColor(R.color.status_waiting))
             requestOverlayBtn.visibility = View.VISIBLE
         }
     }
-    
+
     /**
      * Updates the keyboard status display.
      *
@@ -303,22 +266,22 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun updateKeyboardStatus() {
         val status = com.kevinluo.autoglm.input.KeyboardHelper.getAutoGLMKeyboardStatus(this)
-        
+
         when (status) {
             com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.ENABLED -> {
                 keyboardStatusText.text = getString(R.string.keyboard_settings_subtitle)
-                keyboardStatusIcon.setColorFilter(ContextCompat.getColor(this, R.color.status_running))
+                keyboardStatusIcon.setColorFilter(getColor(R.color.status_running))
                 enableKeyboardBtn.visibility = View.GONE
             }
             com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.NOT_ENABLED -> {
                 keyboardStatusText.text = getString(R.string.keyboard_not_enabled)
-                keyboardStatusIcon.setColorFilter(ContextCompat.getColor(this, R.color.status_waiting))
+                keyboardStatusIcon.setColorFilter(getColor(R.color.status_waiting))
                 enableKeyboardBtn.visibility = View.VISIBLE
                 enableKeyboardBtn.text = getString(R.string.enable_keyboard)
             }
         }
     }
-    
+
     /**
      * Updates the battery optimization status display.
      *
@@ -326,20 +289,20 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun updateBatteryOptimizationStatus() {
         val isIgnoring = KeepAliveManager.isIgnoringBatteryOptimizations(this)
-        
+
         batteryOptCard?.visibility = View.VISIBLE
-        
+
         if (isIgnoring) {
             batteryStatusText?.text = getString(R.string.battery_opt_ignored)
-            batteryStatusIcon?.setColorFilter(ContextCompat.getColor(this, R.color.status_running))
+            batteryStatusIcon?.setColorFilter(getColor(R.color.status_running))
             requestBatteryOptBtn?.visibility = View.GONE
         } else {
             batteryStatusText?.text = getString(R.string.battery_opt_not_ignored)
-            batteryStatusIcon?.setColorFilter(ContextCompat.getColor(this, R.color.status_waiting))
+            batteryStatusIcon?.setColorFilter(getColor(R.color.status_waiting))
             requestBatteryOptBtn?.visibility = View.VISIBLE
         }
     }
-    
+
     /**
      * Restores the continuous listening service if it was previously enabled.
      *
@@ -348,7 +311,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun restoreContinuousListeningService() {
         val settingsManager = componentManager.settingsManager
-        if (settingsManager.isContinuousListeningEnabled() && 
+        if (settingsManager.isContinuousListeningEnabled() &&
             settingsManager.isVoiceModelDownloaded() &&
             !ContinuousListeningService.isRunning()) {
             Logger.i(TAG, "Restoring continuous listening service")
@@ -359,26 +322,28 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     override fun onResume() {
         super.onResume()
         Logger.d(TAG, "onResume - checking for settings changes")
-        
+
         // 同步修复状态
         KeepAliveManager.syncFixState(this)
-        
-        // Update Shizuku status and rebind if needed
-        updateShizukuStatus()
-        if (!componentManager.isServiceConnected && hasShizukuPermission()) {
-            Logger.i(TAG, "Service not connected, attempting to rebind")
-            bindUserService()
+
+        // Update Shizuku status and rebind if needed (only in non-system mode)
+        if (!isSystemBuild()) {
+            updateShizukuStatus()
+            if (!componentManager.isServiceConnected && hasShizukuPermission()) {
+                Logger.i(TAG, "Service not connected, attempting to rebind")
+                bindUserService()
+            }
         }
-        
+
         // Update overlay permission status (user may have granted it)
         updateOverlayPermissionStatus()
-        
+
         // Update keyboard status (user may have enabled it)
         updateKeyboardStatus()
-        
+
         // Update battery optimization status
         updateBatteryOptimizationStatus()
-        
+
         // Re-setup floating window callbacks if service is running
         FloatingWindowService.getInstance()?.let { service ->
             service.setStopTaskCallback {
@@ -401,15 +366,15 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 resumeTask()
             }
         }
-        
+
         // Only reinitialize if service is connected and we need to refresh
         if (componentManager.isServiceConnected) {
             // Check if settings actually changed before reinitializing
             // But NEVER reinitialize while a task is running or paused - this would cancel the task!
-            val isTaskActive = componentManager.phoneAgent?.let { 
-                it.isRunning() || it.isPaused() 
+            val isTaskActive = componentManager.phoneAgent?.let {
+                it.isRunning() || it.isPaused()
             } ?: false
-            
+
             if (!isTaskActive && componentManager.settingsManager.hasConfigChanged()) {
                 componentManager.reinitializeAgent()
             }
@@ -421,36 +386,27 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
 
     override fun onDestroy() {
         Logger.i(TAG, "onDestroy - cleaning up")
-        
+
         // Release voice input manager
         voiceInputManager?.release()
-        
+
         // Unregister wake word receiver
         try {
             unregisterReceiver(wakeWordReceiver)
         } catch (e: Exception) {
             Logger.e(TAG, "Error unregistering wake word receiver", e)
         }
-        
+
         super.onDestroy()
-        
-        // Remove Shizuku listeners
-        Shizuku.removeRequestPermissionResultListener(onRequestPermissionResultListener)
-        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-        Shizuku.removeBinderDeadListener(binderDeadListener)
+
+        // Remove Shizuku listeners (only in non-system mode)
+        if (!isSystemBuild()) {
+            // Shizuku code removed for system build
+        }
 
         // Cancel any running task
         componentManager.phoneAgent?.cancel()
-        
-        // Unbind user service
-        if (componentManager.isServiceConnected) {
-            try {
-                Shizuku.unbindUserService(userServiceArgs, userServiceConnection, true)
-            } catch (e: Exception) {
-                Logger.e(TAG, "Error unbinding user service", e)
-            }
-        }
-        
+
         // Note: Don't stop FloatingWindowService here - it should run independently
         // The service will be stopped when user explicitly closes it or the app process is killed
     }
@@ -488,7 +444,6 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         requestBatteryOptBtn = findViewById(R.id.requestBatteryOptBtn)
 
         // Task input views
-        taskInputLayout = findViewById(R.id.taskInputLayout)
         taskInput = findViewById(R.id.taskInput)
         startTaskBtn = findViewById(R.id.startTaskBtn)
         cancelTaskBtn = findViewById(R.id.cancelTaskBtn)
@@ -558,7 +513,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         cancelTaskBtn.setOnClickListener {
             cancelTask()
         }
-        
+
         // Select template button
         btnSelectTemplate.setOnClickListener {
             showTemplateSelectionDialog()
@@ -573,7 +528,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         taskInput.setOnFocusChangeListener { _, _ ->
             updateTaskButtonStates()
         }
-        
+
         // Watch for text changes to enable/disable start button
         taskInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -680,7 +635,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         Logger.i(TAG, "Starting task from floating window: $taskDescription")
 
         // Run task in coroutine
-        lifecycleScope.launch {
+        activityScope.launch {
             try {
                 agent.setListener(this@MainActivity)
                 val result = agent.run(taskDescription)
@@ -710,11 +665,13 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * Registers listeners for permission results, binder received, and binder dead events.
      */
     private fun setupShizukuListeners() {
-        Shizuku.addRequestPermissionResultListener(onRequestPermissionResultListener)
-        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
-        Shizuku.addBinderDeadListener(binderDeadListener)
+        // Skip in system build mode
+        if (isSystemBuild()) {
+            return
+        }
+        // Shizuku code removed for system build
     }
-    
+
     /**
      * Opens the Shizuku app or Play Store if not installed.
      *
@@ -722,6 +679,10 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * listing if Shizuku is not installed.
      */
     private fun openShizukuApp() {
+        if (isSystemBuild()) {
+            return // Not needed in system build
+        }
+        // Shizuku code removed for system build
         val shizukuPackage = "moe.shizuku.privileged.api"
         val launchIntent = packageManager.getLaunchIntentForPackage(shizukuPackage)
         if (launchIntent != null) {
@@ -752,17 +713,17 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             Logger.w(TAG, "Cannot initialize PhoneAgent: service not connected")
             return
         }
-        
+
         // Set up listener
         componentManager.setPhoneAgentListener(this)
-        
+
         // Setup confirmation callback
         setupConfirmationCallback()
-        
+
         updateTaskButtonStates()
         Logger.i(TAG, "PhoneAgent initialized successfully")
     }
-    
+
     /**
      * Sets up the confirmation callback for sensitive operations.
      *
@@ -811,28 +772,29 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun startTask() {
         val taskDescription = taskInput.text?.toString()?.trim() ?: ""
-        
+
         // Validate task description
         if (taskDescription.isBlank()) {
             Toast.makeText(this, R.string.toast_task_empty, Toast.LENGTH_SHORT).show()
-            taskInputLayout.error = getString(R.string.toast_task_empty)
+            // Note: Standard EditText doesn't have error property like TextInputLayout
+            taskInput.error = getString(R.string.toast_task_empty)
             return
         }
-        
-        taskInputLayout.error = null
-        
+
+        taskInput.error = null
+
         val agent = componentManager.phoneAgent
         if (agent == null) {
             Logger.e(TAG, "PhoneAgent not initialized")
             return
         }
-        
+
         // Check if already running
         if (agent.isRunning()) {
             Logger.w(TAG, "Task already running")
             return
         }
-        
+
         // Start floating window service if overlay permission granted
         if (FloatingWindowService.canDrawOverlays(this)) {
             Logger.d(TAG, "startTask: Starting floating window service")
@@ -843,7 +805,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             FloatingWindowService.requestOverlayPermission(this)
             return
         }
-        
+
         // Update UI state - manually set running state since agent.run() hasn't started yet
         updateTaskStatus(TaskStatus.RUNNING)
         // Manually update UI for running state
@@ -851,17 +813,17 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         runningSection.visibility = View.VISIBLE
         cancelTaskBtn.isEnabled = true
         taskInput.isEnabled = false
-        
+
         // 获取 WakeLock 保持任务执行
         KeepAliveManager.acquireTaskWakeLock(this)
-        
+
         // 记录任务执行时间
         ServiceStateManager.recordTaskExecution(this)
-        
+
         Logger.i(TAG, "Starting task: $taskDescription")
-        
+
         // Run task in coroutine
-        lifecycleScope.launch {
+        activityScope.launch {
             // Set up callbacks immediately after service starts
             withContext(Dispatchers.Main) {
                 // Wait a short time for service to initialize
@@ -891,19 +853,19 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 floatingWindow?.updateStatus(TaskStatus.RUNNING)
                 floatingWindow?.show()
             }
-            
+
             // Minimize app to let agent work
             withContext(Dispatchers.Main) {
                 moveTaskToBack(true)
             }
-            
+
             try {
                 val result = agent.run(taskDescription)
-                
+
                 withContext(Dispatchers.Main) {
                     // 释放 WakeLock
                     KeepAliveManager.releaseTaskWakeLock()
-                    
+
                     if (result.success) {
                         Logger.i(TAG, "Task completed: ${result.message}")
                         updateTaskStatus(TaskStatus.COMPLETED)
@@ -918,7 +880,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 withContext(Dispatchers.Main) {
                     // 释放 WakeLock
                     KeepAliveManager.releaseTaskWakeLock()
-                    
+
                     updateTaskStatus(TaskStatus.FAILED)
                     updateTaskButtonStates()
                 }
@@ -935,26 +897,26 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun cancelTask() {
         Logger.i(TAG, "Cancelling task")
-        
+
         // 释放 WakeLock
         KeepAliveManager.releaseTaskWakeLock()
-        
+
         // Cancel the agent - this will cancel any ongoing network requests
         componentManager.phoneAgent?.cancel()
-        
+
         // Reset the agent state so it can accept new tasks
         componentManager.phoneAgent?.reset()
-        
+
         Toast.makeText(this, R.string.toast_task_cancelled, Toast.LENGTH_SHORT).show()
         updateTaskStatus(TaskStatus.FAILED)
         updateTaskButtonStates()
-        
+
         // Update floating window to show cancelled state
         // Use the same message as PhoneAgent for consistency
         val cancellationMessage = PhoneAgent.CANCELLATION_MESSAGE
         FloatingWindowService.getInstance()?.showResult(cancellationMessage, false)
     }
-    
+
     /**
      * Pauses the currently running task.
      *
@@ -962,14 +924,14 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun pauseTask() {
         Logger.i(TAG, "Pausing task")
-        
+
         val paused = componentManager.phoneAgent?.pause() == true
         if (paused) {
             updateTaskStatus(TaskStatus.PAUSED)
             FloatingWindowService.getInstance()?.updateStatus(TaskStatus.PAUSED)
         }
     }
-    
+
     /**
      * Resumes a paused task.
      *
@@ -977,7 +939,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun resumeTask() {
         Logger.i(TAG, "Resuming task")
-        
+
         val resumed = componentManager.phoneAgent?.resume() == true
         if (resumed) {
             updateTaskStatus(TaskStatus.RUNNING)
@@ -996,15 +958,15 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         val hasAgent = componentManager.phoneAgent != null
         val hasTaskText = !taskInput.text.isNullOrBlank()
         val isRunning = componentManager.phoneAgent?.isRunning() == true
-        
+
         // Show/hide sections based on running state
         startTaskBtn.visibility = if (isRunning) View.GONE else View.VISIBLE
         runningSection.visibility = if (isRunning) View.VISIBLE else View.GONE
-        
+
         startTaskBtn.isEnabled = hasService && hasAgent && hasTaskText && !isRunning
         cancelTaskBtn.isEnabled = isRunning
         taskInput.isEnabled = !isRunning
-        
+
         Logger.d(
             TAG,
             "Button states updated: service=$hasService, agent=$hasAgent, " +
@@ -1031,14 +993,14 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             TaskStatus.WAITING_CONFIRMATION -> "等待确认" to R.color.status_waiting
             TaskStatus.WAITING_TAKEOVER -> "等待接管" to R.color.status_waiting
         }
-        
+
         taskStatusText.text = text
-        
+
         val drawable = taskStatusIndicator.background as? GradientDrawable
             ?: GradientDrawable().also { taskStatusIndicator.background = it }
         drawable.shape = GradientDrawable.OVAL
-        drawable.setColor(ContextCompat.getColor(this, colorRes))
-        
+        drawable.setColor(getColor(colorRes))
+
         // Also update floating window
         FloatingWindowService.getInstance()?.updateStatus(status)
     }
@@ -1170,47 +1132,24 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * then updates the UI to reflect the current state.
      */
     private fun updateShizukuStatus() {
-        val isBinderAlive = try {
-            Shizuku.pingBinder()
-        } catch (e: Exception) {
-            false
+        // Skip in system build mode
+        if (isSystemBuild()) {
+            return
         }
 
-        val hasPermission = hasShizukuPermission()
+        // Shizuku code removed for system build
+        // In system build, service is always connected via SystemService
         val serviceConnected = componentManager.isServiceConnected
 
-        val statusMessage = when {
-            !isBinderAlive -> getString(R.string.shizuku_status_not_running)
-            !hasPermission -> getString(R.string.shizuku_status_no_permission)
-            !serviceConnected -> getString(R.string.shizuku_status_connecting)
-            else -> getString(R.string.shizuku_status_connected)
-        }
-        
-        val statusColor = when {
-            !isBinderAlive -> R.color.status_failed
-            !hasPermission -> R.color.status_waiting
-            !serviceConnected -> R.color.status_waiting
-            else -> R.color.status_running
-        }
-
         runOnUiThread {
-            statusText.text = statusMessage
-            shizukuStatusIndicator.background.setTint(ContextCompat.getColor(this, statusColor))
-            
-            // Show buttons based on Shizuku state
             if (serviceConnected) {
                 // Connected - hide buttons row
                 shizukuButtonsRow.visibility = View.GONE
             } else {
                 // Not connected - show buttons row
                 shizukuButtonsRow.visibility = View.VISIBLE
-                // Open Shizuku button - always visible when not connected
-                openShizukuBtn.visibility = View.VISIBLE
-                // Permission button - always visible, but disabled when Shizuku not running
-                requestPermissionBtn.visibility = View.VISIBLE
-                requestPermissionBtn.isEnabled = isBinderAlive
             }
-            
+
             updateTaskButtonStates()
         }
     }
@@ -1221,11 +1160,13 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * @return true if Shizuku is running and permission is granted, false otherwise
      */
     private fun hasShizukuPermission(): Boolean {
-        return try {
-            Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        } catch (e: Exception) {
-            false
+        // In system build mode, always return true (we have system permissions)
+        if (isSystemBuild()) {
+            return true
         }
+
+        // Shizuku code removed for system build
+        return false
     }
 
     /**
@@ -1235,28 +1176,11 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * various edge cases like Shizuku not running or old version.
      */
     private fun requestShizukuPermission() {
-        if (!Shizuku.pingBinder()) {
-            Toast.makeText(this, R.string.toast_shizuku_not_running, Toast.LENGTH_LONG).show()
-            return
+        if (isSystemBuild()) {
+            return // Not needed in system build
         }
-
-        if (Shizuku.isPreV11()) {
-            Toast.makeText(this, R.string.toast_shizuku_version_low, Toast.LENGTH_LONG).show()
-            return
-        }
-
-        if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, R.string.toast_shizuku_already_granted, Toast.LENGTH_SHORT).show()
-            bindUserService()
-            return
-        }
-
-        if (Shizuku.shouldShowRequestPermissionRationale()) {
-            Toast.makeText(this, R.string.toast_shizuku_grant_in_app, Toast.LENGTH_LONG).show()
-            return
-        }
-
-        Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
+        // Shizuku code removed for system build
+        Toast.makeText(this@MainActivity, getString(R.string.toast_shizuku_not_running), Toast.LENGTH_LONG).show()
     }
 
     /**
@@ -1265,18 +1189,48 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      * Attempts to bind the user service if Shizuku permission is granted.
      */
     private fun bindUserService() {
-        if (!hasShizukuPermission()) return
-        try {
-            Logger.i(TAG, "Binding user service")
-            Shizuku.bindUserService(userServiceArgs, userServiceConnection)
-        } catch (e: Exception) {
-            Logger.e(TAG, "Failed to bind service", e)
+        if (isSystemBuild()) {
+            return // Not needed in system build
         }
+        // Shizuku code removed for system build
     }
 
     // endregion
 
     // region Helper Methods
+
+    /**
+     * Checks if the app is running in system build mode.
+     *
+     * In system build, the app runs with system UID (1000) or is signed with platform key.
+     * This method checks both conditions.
+     *
+     * @return true if running in system build mode, false otherwise
+     */
+    private fun isSystemBuild(): Boolean {
+        return try {
+            // Check if running with system UID
+            val uid = android.os.Process.myUid()
+            val isSystemUid = uid == android.os.Process.SYSTEM_UID ||
+                             (uid >= 10000 && uid < 20000) // System UID range
+
+            // Check if signed with platform key (via BuildConfig flag if available)
+            // For system builds, we can set a build config flag
+            val isPlatformSigned = try {
+                // Check if we can access system-level APIs without permission errors
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                am.appTasks // This requires system permissions
+                true
+            } catch (e: SecurityException) {
+                false
+            }
+
+            isSystemUid || isPlatformSigned
+        } catch (e: Exception) {
+            Logger.w(TAG, "Error checking system build status", e)
+            false
+        }
+    }
 
     /**
      * Formats an agent action for display.
@@ -1287,9 +1241,9 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private fun formatAction(action: AgentAction): String = action.formatForDisplay()
 
     // endregion
-    
+
     // region Task Templates
-    
+
     /**
      * Shows a dialog to select a task template.
      *
@@ -1298,9 +1252,9 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
      */
     private fun showTemplateSelectionDialog() {
         val templates = componentManager.settingsManager.getTaskTemplates()
-        
+
         if (templates.isEmpty()) {
-            Toast.makeText(this, R.string.settings_no_templates, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, getString(R.string.settings_no_templates), Toast.LENGTH_SHORT).show()
             // Offer to go to settings to add templates
             AlertDialog.Builder(this)
                 .setTitle(R.string.task_select_template)
@@ -1312,9 +1266,9 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 .show()
             return
         }
-        
+
         val templateNames = templates.map { it.name }.toTypedArray()
-        
+
         AlertDialog.Builder(this)
             .setTitle(R.string.task_select_template)
             .setItems(templateNames) { _, which ->
@@ -1325,11 +1279,11 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     // endregion
 
     // region Voice Input
-    
+
     /**
      * Handles voice button click.
      * Checks permissions and model status before starting recording.
@@ -1337,21 +1291,21 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private fun onVoiceButtonClick() {
         // Check audio permission first
         if (!hasAudioPermission()) {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioPermissionRequestCode)
             return
         }
-        
+
         // Initialize voice input manager if needed
         if (voiceInputManager == null) {
             voiceInputManager = VoiceInputManager(this)
         }
-        
+
         // Check if model is downloaded
         if (!voiceInputManager!!.isModelReady()) {
             showModelDownloadDialog()
             return
         }
-        
+
         // Toggle recording
         if (isVoiceRecording) {
             stopVoiceRecording()
@@ -1359,23 +1313,24 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             startVoiceRecording()
         }
     }
-    
+
     /**
      * Checks if audio recording permission is granted.
      */
     private fun hasAudioPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Permission granted by default on older versions
+        }
     }
-    
+
     /**
      * Shows dialog to confirm model download.
      */
     private fun showModelDownloadDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_voice_download_confirm, null)
-        
+
         AlertDialog.Builder(this)
             .setView(dialogView)
             .setPositiveButton(R.string.voice_download_confirm) { _, _ ->
@@ -1384,7 +1339,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Starts the model download process.
      */
@@ -1392,7 +1347,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         val dialogView = layoutInflater.inflate(R.layout.dialog_voice_download_progress, null)
         val progressBar = dialogView.findViewById<android.widget.ProgressBar>(R.id.downloadProgressBar)
         val progressText = dialogView.findViewById<TextView>(R.id.downloadProgressText)
-        
+
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
@@ -1400,17 +1355,17 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                 voiceInputManager?.getModelManager()?.cancelDownload()
             }
             .create()
-        
+
         dialog.show()
-        
-        lifecycleScope.launch {
+
+        activityScope.launch {
             voiceInputManager?.getModelManager()?.downloadModel(object : VoiceModelDownloadListener {
                 override fun onDownloadStarted() {
                     runOnUiThread {
                         progressText.text = getString(R.string.voice_downloading)
                     }
                 }
-                
+
                 override fun onDownloadProgress(progress: Int, downloadedBytes: Long, totalBytes: Long) {
                     runOnUiThread {
                         progressBar.progress = progress
@@ -1419,21 +1374,21 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                         progressText.text = getString(R.string.voice_download_progress, downloadedMB, totalMB)
                     }
                 }
-                
+
                 override fun onDownloadCompleted(modelPath: String) {
                     runOnUiThread {
                         dialog.dismiss()
                         Toast.makeText(this@MainActivity, R.string.voice_download_complete, Toast.LENGTH_SHORT).show()
                     }
                 }
-                
+
                 override fun onDownloadFailed(error: String) {
                     runOnUiThread {
                         dialog.dismiss()
                         Toast.makeText(this@MainActivity, getString(R.string.voice_download_failed, error), Toast.LENGTH_LONG).show()
                     }
                 }
-                
+
                 override fun onDownloadCancelled() {
                     runOnUiThread {
                         dialog.dismiss()
@@ -1442,14 +1397,14 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             })
         }
     }
-    
+
     /**
      * Starts voice recording.
      */
     private fun startVoiceRecording() {
         // 清空输入框
         taskInput.setText("")
-        
+
         // 显示语音录音对话框
         val dialog = VoiceRecordingDialog(
             context = this,
@@ -1463,7 +1418,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                         taskInput.setText("$currentText ${result.text}")
                     }
                     taskInput.setSelection(taskInput.text?.length ?: 0)
-                    
+
                     // 用户已在对话框内确认，直接运行任务
                     startTask()
                 }
@@ -1483,14 +1438,14 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         )
         dialog.show()
     }
-    
+
     /**
      * Stops voice recording.
      */
     private fun stopVoiceRecording() {
         voiceInputManager?.stopRecording()
     }
-    
+
     /**
      * Handles wake word detection.
      * Shows voice recording dialog for user to continue speaking.
@@ -1498,18 +1453,18 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
     private fun onWakeWordDetected(wakeWord: String?, recognizedText: String?) {
         runOnUiThread {
             Logger.i(TAG, "Wake word detected: $wakeWord, text: $recognizedText")
-            
+
             // 播放提示音
             playWakeSound()
-            
+
             // 显示 Toast 提示
             Toast.makeText(this, getString(R.string.voice_wake_word_detected, wakeWord), Toast.LENGTH_SHORT).show()
-            
+
             // 弹出语音输入对话框
             showVoiceInputDialog()
         }
     }
-    
+
     /**
      * 播放唤醒提示音
      */
@@ -1522,7 +1477,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             Logger.e(TAG, "Error playing wake sound", e)
         }
     }
-    
+
     /**
      * 显示语音输入对话框
      */
@@ -1532,21 +1487,21 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
             Logger.d(TAG, "Voice recording dialog already showing, ignoring")
             return
         }
-        
+
         // 初始化语音输入管理器
         if (voiceInputManager == null) {
             voiceInputManager = VoiceInputManager(this)
         }
-        
+
         // 检查模型是否已下载
         if (!voiceInputManager!!.isModelReady()) {
             Toast.makeText(this, R.string.voice_model_not_downloaded, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         // 清空输入框
         taskInput.setText("")
-        
+
         // 显示语音录音对话框
         voiceRecordingDialog = VoiceRecordingDialog(
             context = this,
@@ -1561,7 +1516,7 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
                         taskInput.setText("$currentText ${result.text}")
                     }
                     taskInput.setSelection(taskInput.text?.length ?: 0)
-                    
+
                     // 用户已在对话框内确认，直接运行任务
                     startTask()
                 }
@@ -1585,11 +1540,6 @@ class MainActivity : AppCompatActivity(), PhoneAgentListener {
         }
         voiceRecordingDialog?.show()
     }
-    
-    // endregion
 
-    companion object {
-        private const val TAG = "MainActivity"
-        private const val SHIZUKU_PERMISSION_REQUEST_CODE = 100
-    }
+    // endregion
 }

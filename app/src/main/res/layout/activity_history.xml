@@ -20,10 +20,10 @@
             android:id="@+id/backBtn"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             android:src="@drawable/ic_arrow_back"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
         <TextView
             android:layout_width="0dp"
@@ -39,10 +39,10 @@
             android:id="@+id/clearAllBtn"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Clear all"
             android:src="@drawable/ic_delete"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
     </LinearLayout>
 
@@ -60,10 +60,10 @@
             android:id="@+id/cancelSelectionBtn"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/dialog_cancel"
             android:src="@drawable/ic_close"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
         <TextView
             android:id="@+id/selectionCountText"
@@ -79,19 +79,19 @@
             android:id="@+id/selectAllBtn"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/history_select_all"
             android:src="@drawable/ic_select_all"
-            app:tint="@color/icon_secondary" />
+            android:tint="@color/icon_secondary" />
 
         <ImageButton
             android:id="@+id/deleteSelectedBtn"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/history_delete_selected"
             android:src="@drawable/ic_delete"
-            app:tint="@color/status_error" />
+            android:tint="@color/status_error" />
 
     </LinearLayout>
 
@@ -108,7 +108,7 @@
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:src="@drawable/ic_history"
-            app:tint="@color/icon_secondary"
+            android:tint="@color/icon_secondary"
             android:alpha="0.5" />
 
         <TextView

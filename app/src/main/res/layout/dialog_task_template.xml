@@ -8,33 +8,50 @@
     android:paddingTop="16dp"
     android:paddingBottom="8dp">
 
-    <com.google.android.material.textfield.TextInputLayout
+    <LinearLayout
         android:id="@+id/templateNameLayout"
-        style="@style/Widget.App.TextInputLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/settings_template_name"
-        app:boxBackgroundColor="@color/surface_variant">
+        android:orientation="vertical"
+        android:background="@color/surface_variant"
+        android:padding="12dp">
 
-        <com.google.android.material.textfield.TextInputEditText
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_template_name"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
             android:id="@+id/templateNameInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="text"
             android:maxLines="1"
-            android:textSize="15sp" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:textSize="15sp"
+            android:background="@android:color/transparent" />
+    </LinearLayout>
 
-    <com.google.android.material.textfield.TextInputLayout
+    <LinearLayout
         android:id="@+id/templateDescriptionLayout"
-        style="@style/Widget.App.TextInputLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:hint="@string/settings_template_description"
-        app:boxBackgroundColor="@color/surface_variant">
+        android:orientation="vertical"
+        android:background="@color/surface_variant"
+        android:padding="12dp"
+        android:layout_marginTop="12dp">
 
-        <com.google.android.material.textfield.TextInputEditText
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_template_description"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
             android:id="@+id/templateDescriptionInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -42,7 +59,8 @@
             android:inputType="textMultiLine"
             android:minLines="3"
             android:maxLines="6"
-            android:textSize="15sp" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:textSize="15sp"
+            android:background="@android:color/transparent" />
+    </LinearLayout>
 
 </LinearLayout>

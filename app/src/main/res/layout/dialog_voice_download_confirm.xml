@@ -11,7 +11,7 @@
         android:layout_gravity="center"
         android:src="@drawable/ic_mic"
         android:contentDescription="@string/voice_input_title"
-        android:tint="?attr/colorPrimary" />
+        android:tint="@color/primary" />
 
     <TextView
         android:layout_width="match_parent"

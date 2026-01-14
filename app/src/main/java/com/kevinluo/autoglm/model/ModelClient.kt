@@ -4,16 +4,15 @@ import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.*
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.sse.EventSource
-import okhttp3.sse.EventSourceListener
-import okhttp3.sse.EventSources
+// Note: kotlinx.serialization and okhttp3 may not be available in system build
+// Replaced with org.json and HttpURLConnection
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -106,10 +105,10 @@ sealed class ChatMessage {
  * @property content The message content as a JSON element (string or array for multi-modal)
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON serialization
 data class MessageDto(
     val role: String,
-    val content: JsonElement
+    val content: Any // JSONObject or JSONArray or String
 ) {
     companion object {
         /**
@@ -125,33 +124,33 @@ data class MessageDto(
             return when (message) {
                 is ChatMessage.System -> MessageDto(
                     role = "system",
-                    content = JsonPrimitive(message.content)
+                    content = message.content
                 )
                 is ChatMessage.Assistant -> MessageDto(
                     role = "assistant",
-                    content = JsonPrimitive(message.content)
+                    content = message.content
                 )
                 is ChatMessage.User -> {
                     if (message.imageBase64 != null) {
                         // Multi-modal content with text and image
                         // Detect image format from base64 header or default to PNG
                         val mimeType = detectImageMimeType(message.imageBase64)
-                        val contentParts = buildJsonArray {
-                            add(buildJsonObject {
+                        val contentParts = JSONArray().apply {
+                            put(JSONObject().apply {
                                 put("type", "text")
                                 put("text", message.text)
                             })
-                            add(buildJsonObject {
+                            put(JSONObject().apply {
                                 put("type", "image_url")
-                                putJsonObject("image_url") {
+                                put("image_url", JSONObject().apply {
                                     put("url", "data:$mimeType;base64,${message.imageBase64}")
-                                }
+                                })
                             })
                         }
                         MessageDto(role = "user", content = contentParts)
                     } else {
                         // Text-only content
-                        MessageDto(role = "user", content = JsonPrimitive(message.text))
+                        MessageDto(role = "user", content = message.text)
                     }
                 }
             }
@@ -193,11 +192,10 @@ data class MessageDto(
  * @property imageUrl The image URL wrapper, if type is "image_url"
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON serialization
 data class ContentPart(
     val type: String,
     val text: String? = null,
-    @SerialName("image_url")
     val imageUrl: ImageUrl? = null
 )
 
@@ -209,7 +207,7 @@ data class ContentPart(
  * @property url The image URL (can be a data URL with base64 content)
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON serialization
 data class ImageUrl(
     val url: String
 )
@@ -228,19 +226,40 @@ data class ImageUrl(
  * @property stream Whether to stream the response
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON serialization
 data class ChatCompletionRequest(
     val model: String,
     val messages: List<MessageDto>,
-    @SerialName("max_tokens")
     val maxTokens: Int,
     val temperature: Float,
-    @SerialName("top_p")
     val topP: Float,
-    @SerialName("frequency_penalty")
     val frequencyPenalty: Float,
     val stream: Boolean = true
-)
+) {
+    fun toJsonObject(): JSONObject {
+        return JSONObject().apply {
+            put("model", model)
+            put("messages", JSONArray().apply {
+                messages.forEach { msg ->
+                    put(JSONObject().apply {
+                        put("role", msg.role)
+                        when (val content = msg.content) {
+                            is String -> put("content", content)
+                            is JSONArray -> put("content", content)
+                            is JSONObject -> put("content", content)
+                            else -> put("content", content.toString())
+                        }
+                    })
+                }
+            })
+            put("max_tokens", maxTokens)
+            put("temperature", temperature)
+            put("top_p", topP)
+            put("frequency_penalty", frequencyPenalty)
+            put("stream", stream)
+        }
+    }
+}
 
 /**
  * Streaming response chunk.
@@ -250,10 +269,24 @@ data class ChatCompletionRequest(
  * @property choices List of completion choices in this chunk
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON parsing
 data class ChatCompletionChunk(
     val choices: List<ChunkChoice> = emptyList()
-)
+) {
+    companion object {
+        fun fromJson(json: JSONObject): ChatCompletionChunk {
+            val choicesArray = json.optJSONArray("choices")
+            val choices = if (choicesArray != null) {
+                (0 until choicesArray.length()).map { i ->
+                    ChunkChoice.fromJson(choicesArray.getJSONObject(i))
+                }
+            } else {
+                emptyList()
+            }
+            return ChatCompletionChunk(choices = choices)
+        }
+    }
+}
 
 /**
  * Choice in a streaming chunk.
@@ -263,10 +296,22 @@ data class ChatCompletionChunk(
  * @property delta The delta content for this choice
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON parsing
 data class ChunkChoice(
     val delta: Delta = Delta()
-)
+) {
+    companion object {
+        fun fromJson(json: JSONObject): ChunkChoice {
+            val deltaObj = json.optJSONObject("delta")
+            val delta = if (deltaObj != null) {
+                Delta.fromJson(deltaObj)
+            } else {
+                Delta()
+            }
+            return ChunkChoice(delta = delta)
+        }
+    }
+}
 
 /**
  * Delta content in streaming response.
@@ -276,10 +321,16 @@ data class ChunkChoice(
  * @property content The content string added in this delta, or null if none
  *
  */
-@Serializable
+// Note: @Serializable removed, using manual JSON parsing
 data class Delta(
     val content: String? = null
-)
+) {
+    companion object {
+        fun fromJson(json: JSONObject): Delta {
+            return Delta(content = json.optString("content", null))
+        }
+    }
+}
 
 
 /**
@@ -356,22 +407,10 @@ sealed class ModelResult {
  */
 class ModelClient(private val config: ModelConfig) {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
-
-    private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
-            .readTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
-            .writeTimeout(config.timeoutSeconds, TimeUnit.SECONDS)
-            .build()
-    }
-
-    // Track current event source for cancellation
+    // Note: okhttp3 and kotlinx.serialization replaced with HttpURLConnection and org.json
+    // Track current connection for cancellation
     @Volatile
-    private var currentEventSource: EventSource? = null
+    private var currentConnection: HttpURLConnection? = null
 
     /**
      * Cancels the current ongoing request if any.
@@ -379,10 +418,10 @@ class ModelClient(private val config: ModelConfig) {
      * Safe to call even if no request is in progress.
      */
     fun cancelCurrentRequest() {
-        currentEventSource?.let { eventSource ->
+        currentConnection?.let { conn ->
             Logger.d(TAG, "Cancelling current request")
-            eventSource.cancel()
-            currentEventSource = null
+            conn.disconnect()
+            currentConnection = null
         }
     }
 
@@ -416,40 +455,93 @@ class ModelClient(private val config: ModelConfig) {
                 stream = true
             )
 
-            val requestJson = json.encodeToString(requestBody)
-
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer ${config.apiKey}")
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "text/event-stream")
-                .post(requestJson.toRequestBody("application/json".toMediaType()))
-                .build()
+            val requestJson = requestBody.toJsonObject().toString()
 
             val contentBuilder = StringBuilder()
 
             suspendCancellableCoroutine<ModelResult> { continuation ->
-                val eventSourceFactory = EventSources.createFactory(client)
+                try {
+                    val urlObj = URL(url)
+                    val connection = urlObj.openConnection() as HttpURLConnection
+                    currentConnection = connection
 
-                val eventSourceListener = object : EventSourceListener() {
-                    override fun onOpen(eventSource: EventSource, response: Response) {
-                        // Connection opened
+                    connection.requestMethod = "POST"
+                    connection.setRequestProperty("Authorization", "Bearer ${config.apiKey}")
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.setRequestProperty("Accept", "text/event-stream")
+                    connection.connectTimeout = (config.timeoutSeconds * 1000).toInt()
+                    connection.readTimeout = (config.timeoutSeconds * 1000).toInt()
+                    connection.doOutput = true
+
+                    // Write request body
+                    OutputStreamWriter(connection.outputStream).use { writer ->
+                        writer.write(requestJson)
+                        writer.flush()
                     }
 
-                    override fun onEvent(
-                        eventSource: EventSource,
-                        id: String?,
-                        type: String?,
-                        data: String
-                    ) {
-                        if (data == "[DONE]") {
+                    val responseCode = connection.responseCode
+                    if (responseCode != HttpURLConnection.HTTP_OK) {
+                        val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                        Logger.logNetworkError("Server error $responseCode: $errorBody")
+                        continuation.resume(
+                            ModelResult.Error(NetworkError.ServerError(responseCode, errorBody))
+                        )
+                        return@suspendCancellableCoroutine
+                    }
+
+                    // Read SSE stream
+                    BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null && continuation.isActive) {
+                            val data = line ?: continue
+
+                            if (data.startsWith("data: ")) {
+                                val jsonData = data.substring(6).trim()
+
+                                if (jsonData == "[DONE]") {
+                                    val totalTime = System.currentTimeMillis() - startTime
+                                    val rawContent = contentBuilder.toString()
+                                    val (thinking, action) = parseThinkingAndAction(rawContent)
+
+                                    Logger.logNetworkResponse(HttpURLConnection.HTTP_OK, totalTime)
+                                    Logger.d(TAG, "Response complete: ${rawContent.length} chars, TTFT=${timeToFirstToken}ms")
+
+                                    val response = ModelResponse(
+                                        thinking = thinking,
+                                        action = action,
+                                        rawContent = rawContent,
+                                        timeToFirstToken = timeToFirstToken,
+                                        totalTime = totalTime
+                                    )
+
+                                    continuation.resume(ModelResult.Success(response))
+                                    break
+                                }
+
+                                try {
+                                    val chunkJson = JSONObject(jsonData)
+                                    val chunk = ChatCompletionChunk.fromJson(chunkJson)
+                                    val content = chunk.choices.firstOrNull()?.delta?.content
+
+                                    if (content != null) {
+                                        if (timeToFirstToken == null) {
+                                            timeToFirstToken = System.currentTimeMillis() - startTime
+                                            Logger.d(TAG, "First token received after ${timeToFirstToken}ms")
+                                        }
+                                        contentBuilder.append(content)
+                                    }
+                                } catch (e: Exception) {
+                                    // Ignore parse errors for individual chunks
+                                    Logger.v(TAG, "Chunk parse error (ignored): ${e.message}")
+                                }
+                            }
+                        }
+
+                        // If we haven't resumed yet, do so with what we have
+                        if (continuation.isActive && contentBuilder.isNotEmpty()) {
                             val totalTime = System.currentTimeMillis() - startTime
                             val rawContent = contentBuilder.toString()
                             val (thinking, action) = parseThinkingAndAction(rawContent)
-
-                            Logger.logNetworkResponse(HTTP_STATUS_OK, totalTime)
-                            Logger.d(TAG, "Response complete: ${rawContent.length} chars, TTFT=${timeToFirstToken}ms")
-
                             val response = ModelResponse(
                                 thinking = thinking,
                                 action = action,
@@ -457,98 +549,46 @@ class ModelClient(private val config: ModelConfig) {
                                 timeToFirstToken = timeToFirstToken,
                                 totalTime = totalTime
                             )
-
-                            if (continuation.isActive) {
-                                continuation.resume(ModelResult.Success(response))
-                            }
-                            return
-                        }
-
-                        try {
-                            val chunk = json.decodeFromString<ChatCompletionChunk>(data)
-                            val content = chunk.choices.firstOrNull()?.delta?.content
-
-                            if (content != null) {
-                                if (timeToFirstToken == null) {
-                                    timeToFirstToken = System.currentTimeMillis() - startTime
-                                    Logger.d(TAG, "First token received after ${timeToFirstToken}ms")
-                                }
-                                contentBuilder.append(content)
-                            }
-                        } catch (e: Exception) {
-                            // Ignore parse errors for individual chunks
-                            Logger.v(TAG, "Chunk parse error (ignored): ${e.message}")
+                            continuation.resume(ModelResult.Success(response))
+                        } else if (continuation.isActive) {
+                            Logger.logNetworkError("Empty response received")
+                            continuation.resume(
+                                ModelResult.Error(NetworkError.ParseError("Empty response"))
+                            )
                         }
                     }
-
-                    override fun onClosed(eventSource: EventSource) {
-                        // If we haven't resumed yet, do so with what we have
-                        if (continuation.isActive) {
-                            val totalTime = System.currentTimeMillis() - startTime
-                            val rawContent = contentBuilder.toString()
-
-                            if (rawContent.isNotEmpty()) {
-                                val (thinking, action) = parseThinkingAndAction(rawContent)
-                                val response = ModelResponse(
-                                    thinking = thinking,
-                                    action = action,
-                                    rawContent = rawContent,
-                                    timeToFirstToken = timeToFirstToken,
-                                    totalTime = totalTime
-                                )
-                                continuation.resume(ModelResult.Success(response))
-                            } else {
-                                Logger.logNetworkError("Empty response received")
-                                continuation.resume(
-                                    ModelResult.Error(NetworkError.ParseError("Empty response"))
-                                )
+                } catch (e: Exception) {
+                    if (continuation.isActive) {
+                        val error = when (e) {
+                            is java.net.SocketTimeoutException -> {
+                                Logger.logNetworkError("Request timeout", e)
+                                NetworkError.Timeout(config.timeoutSeconds * 1000)
+                            }
+                            is IOException -> {
+                                Logger.logNetworkError("Connection failed: ${e.message}", e)
+                                NetworkError.ConnectionFailed(e.message ?: "Connection failed")
+                            }
+                            else -> {
+                                Logger.logNetworkError("Unknown error: ${e.message}", e)
+                                NetworkError.ConnectionFailed(e.message ?: "Unknown error")
                             }
                         }
+                        continuation.resume(ModelResult.Error(error))
                     }
-
-                    override fun onFailure(
-                        eventSource: EventSource,
-                        t: Throwable?,
-                        response: Response?
-                    ) {
-                        if (continuation.isActive) {
-                            val error = when {
-                                t is java.net.SocketTimeoutException -> {
-                                    Logger.logNetworkError("Request timeout", t)
-                                    NetworkError.Timeout(config.timeoutSeconds * MILLIS_PER_SECOND)
-                                }
-                                t is IOException -> {
-                                    Logger.logNetworkError("Connection failed: ${t.message}", t)
-                                    NetworkError.ConnectionFailed(t.message ?: "Connection failed")
-                                }
-                                response != null && !response.isSuccessful -> {
-                                    Logger.logNetworkError("Server error ${response.code}: ${response.message}")
-                                    NetworkError.ServerError(
-                                        response.code,
-                                        response.message.ifEmpty { "Server error" }
-                                    )
-                                }
-                                else -> {
-                                    Logger.logNetworkError("Unknown error: ${t?.message}", t)
-                                    NetworkError.ConnectionFailed(t?.message ?: "Unknown error")
-                                }
-                            }
-                            continuation.resume(ModelResult.Error(error))
-                        }
-                    }
+                } finally {
+                    currentConnection?.disconnect()
+                    currentConnection = null
                 }
-
-                val eventSource = eventSourceFactory.newEventSource(request, eventSourceListener)
-                currentEventSource = eventSource
 
                 continuation.invokeOnCancellation {
                     Logger.d(TAG, "Request cancelled via coroutine cancellation")
-                    eventSource.cancel()
-                    currentEventSource = null
+                    currentConnection?.disconnect()
+                    currentConnection = null
                 }
             }
         } catch (e: Exception) {
-            currentEventSource = null
+            currentConnection?.disconnect()
+            currentConnection = null
             Logger.logNetworkError("Request failed: ${e.message}", e)
             when (e) {
                 is java.net.SocketTimeoutException ->
@@ -735,7 +775,7 @@ class ModelClient(private val config: ModelConfig) {
             // Create a minimal test request
             val testMessage = MessageDto(
                 role = "user",
-                content = JsonPrimitive("Hi")
+                content = "Hi"
             )
 
             val requestBody = ChatCompletionRequest(
@@ -748,38 +788,44 @@ class ModelClient(private val config: ModelConfig) {
                 stream = false
             )
 
-            val requestJson = json.encodeToString(requestBody)
+            val requestJson = requestBody.toJsonObject().toString()
 
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer ${config.apiKey}")
-                .addHeader("Content-Type", "application/json")
-                .post(requestJson.toRequestBody("application/json".toMediaType()))
-                .build()
+            val urlObj = URL(url)
+            val connection = urlObj.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Authorization", "Bearer ${config.apiKey}")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.connectTimeout = (config.timeoutSeconds * 1000).toInt()
+            connection.readTimeout = (config.timeoutSeconds * 1000).toInt()
+            connection.doOutput = true
 
-            val response = client.newCall(request).execute()
+            // Write request body
+            OutputStreamWriter(connection.outputStream).use { writer ->
+                writer.write(requestJson)
+                writer.flush()
+            }
+
+            val responseCode = connection.responseCode
             val latency = System.currentTimeMillis() - startTime
 
-            response.use { resp ->
-                when {
-                    resp.isSuccessful -> {
-                        Logger.logNetworkResponse(resp.code, latency)
-                        Logger.d(TAG, "Connection test successful, latency: ${latency}ms")
-                        TestResult.Success(latency)
-                    }
-                    resp.code == HTTP_STATUS_UNAUTHORIZED -> {
-                        Logger.logNetworkError("Connection test failed: Invalid API key (${resp.code})")
-                        TestResult.AuthError("API 密钥无效")
-                    }
-                    resp.code == HTTP_STATUS_NOT_FOUND -> {
-                        Logger.logNetworkError("Connection test failed: Model not found (${resp.code})")
-                        TestResult.ModelNotFound("模型 '${config.modelName}' 不存在")
-                    }
-                    else -> {
-                        val errorBody = resp.body?.string() ?: ""
-                        Logger.logNetworkError("Connection test failed: ${resp.code} - $errorBody")
-                        TestResult.ServerError(resp.code, resp.message.ifEmpty { "服务器错误" })
-                    }
+            when {
+                responseCode == HttpURLConnection.HTTP_OK -> {
+                    Logger.logNetworkResponse(responseCode, latency)
+                    Logger.d(TAG, "Connection test successful, latency: ${latency}ms")
+                    TestResult.Success(latency)
+                }
+                responseCode == HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                    Logger.logNetworkError("Connection test failed: Invalid API key ($responseCode)")
+                    TestResult.AuthError("API 密钥无效")
+                }
+                responseCode == HttpURLConnection.HTTP_NOT_FOUND -> {
+                    Logger.logNetworkError("Connection test failed: Model not found ($responseCode)")
+                    TestResult.ModelNotFound("模型 '${config.modelName}' 不存在")
+                }
+                else -> {
+                    val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    Logger.logNetworkError("Connection test failed: $responseCode - $errorBody")
+                    TestResult.ServerError(responseCode, errorBody.ifEmpty { "服务器错误" })
                 }
             }
         } catch (e: java.net.SocketTimeoutException) {

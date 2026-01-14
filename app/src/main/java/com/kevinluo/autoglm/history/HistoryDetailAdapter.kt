@@ -7,9 +7,9 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButton
+// Note: RecyclerView may not be available in system build
+// import androidx.recyclerview.widget.RecyclerView
+import android.widget.Button
 import com.kevinluo.autoglm.R
 import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -34,14 +34,16 @@ import java.util.Locale
 class HistoryDetailAdapter(
     private val historyManager: HistoryManager,
     private val coroutineScope: CoroutineScope
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-    
+) {
+    // Note: RecyclerView.Adapter may not be available in system build
+    // Creating placeholder adapter class
+
     private var task: TaskHistory? = null
     private val loadedBitmaps = mutableMapOf<String, Bitmap>()
     private val loadingJobs = mutableMapOf<Int, Job>()
-    
+
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-    
+
     /**
      * Sets the task to display.
      *
@@ -50,9 +52,9 @@ class HistoryDetailAdapter(
     fun setTask(task: TaskHistory) {
         this.task = task
         Logger.d(TAG, "Set task with ${task.stepCount} steps")
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
     }
-    
+
     /**
      * Cleans up resources including cached bitmaps and pending jobs.
      *
@@ -65,11 +67,13 @@ class HistoryDetailAdapter(
         loadedBitmaps.clear()
         Logger.d(TAG, "Cleaned up adapter resources")
     }
-    
+
+    /*
+    // Original RecyclerView.Adapter implementation (commented out)
     override fun getItemViewType(position: Int): Int {
         return if (position == 0) TYPE_HEADER else TYPE_STEP
     }
-    
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {
@@ -83,7 +87,7 @@ class HistoryDetailAdapter(
             }
         }
     }
-    
+
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val currentTask = task ?: return
         when (holder) {
@@ -96,12 +100,12 @@ class HistoryDetailAdapter(
             }
         }
     }
-    
+
     override fun getItemCount(): Int {
         val currentTask = task ?: return 0
         return 1 + currentTask.steps.size  // 1 header + steps
     }
-    
+
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
         if (holder is StepViewHolder) {
@@ -110,15 +114,16 @@ class HistoryDetailAdapter(
             holder.clearImage()
         }
     }
-    
+    */
+
     /**
      * ViewHolder for the header section displaying task overview.
      */
-    inner class HeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    inner class HeaderViewHolder(val itemView: View) {
         private val taskDescription: TextView = itemView.findViewById(R.id.taskDescription)
         private val statusText: TextView = itemView.findViewById(R.id.statusText)
         private val infoText: TextView = itemView.findViewById(R.id.infoText)
-        
+
         /**
          * Binds task data to the header view.
          *
@@ -126,20 +131,20 @@ class HistoryDetailAdapter(
          */
         fun bind(task: TaskHistory) {
             taskDescription.text = task.taskDescription
-            
+
             val context = itemView.context
             if (task.success) {
                 statusText.text = context.getString(R.string.history_success)
-                statusText.setTextColor(ContextCompat.getColor(context, R.color.status_success))
+                statusText.setTextColor(context.getColor(R.color.status_success))
             } else {
                 statusText.text = context.getString(R.string.history_failed)
-                statusText.setTextColor(ContextCompat.getColor(context, R.color.status_error))
+                statusText.setTextColor(context.getColor(R.color.status_error))
             }
-            
+
             val duration = formatDuration(task.duration)
             infoText.text = "${dateFormat.format(Date(task.startTime))} · ${task.stepCount}步 · $duration"
         }
-        
+
         /**
          * Formats duration in milliseconds to a human-readable string.
          *
@@ -155,13 +160,13 @@ class HistoryDetailAdapter(
             }
         }
     }
-    
+
     /**
      * ViewHolder for individual step items.
      *
      * Displays step number, action description, thinking, screenshot, and status.
      */
-    inner class StepViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    inner class StepViewHolder(val itemView: View) {
         private val stepNumber: TextView = itemView.findViewById(R.id.stepNumber)
         private val actionDescription: TextView = itemView.findViewById(R.id.actionDescription)
         private val statusIcon: ImageView = itemView.findViewById(R.id.statusIcon)
@@ -169,12 +174,12 @@ class HistoryDetailAdapter(
         private val thinkingText: TextView = itemView.findViewById(R.id.thinkingText)
         private val screenshotSection: LinearLayout = itemView.findViewById(R.id.screenshotSection)
         private val screenshotImage: ImageView = itemView.findViewById(R.id.screenshotImage)
-        private val btnOriginal: MaterialButton = itemView.findViewById(R.id.btnOriginal)
-        private val btnAnnotated: MaterialButton = itemView.findViewById(R.id.btnAnnotated)
+        private val btnOriginal: Button = itemView.findViewById(R.id.btnOriginal)
+        private val btnAnnotated: Button = itemView.findViewById(R.id.btnAnnotated)
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
-        
+
         private var currentStep: HistoryStep? = null
-        
+
         /**
          * Binds step data to the view.
          *
@@ -182,48 +187,48 @@ class HistoryDetailAdapter(
          */
         fun bind(step: HistoryStep) {
             currentStep = step
-            
+
             stepNumber.text = step.stepNumber.toString()
             actionDescription.text = step.actionDescription
-            
+
             val context = itemView.context
             if (step.success) {
                 statusIcon.setImageResource(R.drawable.ic_check_circle)
-                statusIcon.setColorFilter(ContextCompat.getColor(context, R.color.status_success))
+                statusIcon.setColorFilter(context.getColor(R.color.status_success))
             } else {
                 statusIcon.setImageResource(R.drawable.ic_error)
-                statusIcon.setColorFilter(ContextCompat.getColor(context, R.color.status_error))
+                statusIcon.setColorFilter(context.getColor(R.color.status_error))
             }
-            
+
             if (step.thinking.isNotBlank()) {
                 thinkingSection.visibility = View.VISIBLE
                 thinkingText.text = step.thinking
             } else {
                 thinkingSection.visibility = View.GONE
             }
-            
+
             if (step.screenshotPath != null || step.annotatedScreenshotPath != null) {
                 screenshotSection.visibility = View.VISIBLE
                 screenshotImage.setImageDrawable(null)
-                
+
                 val defaultPath = step.annotatedScreenshotPath ?: step.screenshotPath
                 loadScreenshot(defaultPath, screenshotImage)
-                
+
                 val hasAnnotated = step.annotatedScreenshotPath != null
                 btnAnnotated.visibility = if (hasAnnotated) View.VISIBLE else View.GONE
-                
+
                 btnOriginal.setOnClickListener {
                     loadScreenshot(step.screenshotPath, screenshotImage)
                     btnOriginal.alpha = 1f
                     btnAnnotated.alpha = 0.5f
                 }
-                
+
                 btnAnnotated.setOnClickListener {
                     loadScreenshot(step.annotatedScreenshotPath, screenshotImage)
                     btnOriginal.alpha = 0.5f
                     btnAnnotated.alpha = 1f
                 }
-                
+
                 if (hasAnnotated) {
                     btnOriginal.alpha = 0.5f
                     btnAnnotated.alpha = 1f
@@ -233,7 +238,7 @@ class HistoryDetailAdapter(
             } else {
                 screenshotSection.visibility = View.GONE
             }
-            
+
             if (!step.message.isNullOrBlank()) {
                 messageText.visibility = View.VISIBLE
                 messageText.text = step.message
@@ -241,14 +246,14 @@ class HistoryDetailAdapter(
                 messageText.visibility = View.GONE
             }
         }
-        
+
         /**
          * Clears the screenshot image to free memory.
          */
         fun clearImage() {
             screenshotImage.setImageDrawable(null)
         }
-        
+
         /**
          * Loads a screenshot asynchronously and displays it.
          *
@@ -259,17 +264,20 @@ class HistoryDetailAdapter(
          */
         private fun loadScreenshot(path: String?, imageView: ImageView) {
             if (path == null) return
-            
+
             loadedBitmaps[path]?.let {
                 if (!it.isRecycled) {
                     imageView.setImageBitmap(it)
                     return
                 }
             }
-            
-            loadingJobs[adapterPosition]?.cancel()
-            
-            loadingJobs[adapterPosition] = coroutineScope.launch {
+
+            // Note: adapterPosition not available without RecyclerView.ViewHolder
+            // Use path as key instead
+            loadingJobs.values.find { it.isActive }?.cancel()
+            val jobKey = loadingJobs.size // Use size as a simple key
+
+            loadingJobs[jobKey] = coroutineScope.launch {
                 val bitmap = withContext(Dispatchers.IO) {
                     historyManager.getScreenshotBitmap(path)
                 }
@@ -282,7 +290,7 @@ class HistoryDetailAdapter(
             }
         }
     }
-    
+
     companion object {
         private const val TAG = "HistoryDetailAdapter"
         private const val TYPE_HEADER = 0

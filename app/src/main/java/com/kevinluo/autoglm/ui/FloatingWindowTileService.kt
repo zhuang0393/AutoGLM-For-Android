@@ -5,14 +5,12 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import androidx.annotation.RequiresApi
 import com.kevinluo.autoglm.util.Logger
 
 /**
  * Quick Settings Tile for toggling the floating window.
  * Users can add this tile to their quick settings panel for easy access.
  */
-@RequiresApi(Build.VERSION_CODES.N)
 class FloatingWindowTileService : TileService() {
 
     override fun onStartListening() {
@@ -47,7 +45,7 @@ class FloatingWindowTileService : TileService() {
         }
         startActivityAndCollapseCompat(intent)
     }
-    
+
     /**
      * Compatibility wrapper for startActivityAndCollapse.
      * API 34+ requires PendingIntent, older versions use Intent directly.
@@ -88,14 +86,14 @@ class FloatingWindowTileService : TileService() {
 
     private fun updateTileState() {
         val tile = qsTile ?: return
-        
+
         val service = FloatingWindowService.getInstance()
         val isVisible = service?.isVisible() == true
-        
+
         tile.state = if (isVisible) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = getString(com.kevinluo.autoglm.R.string.tile_floating_window)
         tile.contentDescription = getString(com.kevinluo.autoglm.R.string.tile_floating_window_desc)
-        
+
         tile.updateTile()
     }
 

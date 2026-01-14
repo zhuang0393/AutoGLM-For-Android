@@ -22,24 +22,24 @@ import com.kevinluo.autoglm.util.Logger
 /**
  * Centralized component manager for dependency injection and lifecycle management.
  * Provides a single point of access for all major components in the application.
- * 
+ *
  * This class ensures:
  * - Proper dependency injection
  * - Lifecycle-aware component management
  * - Clean separation of concerns
- * 
+ *
  */
 class ComponentManager private constructor(private val context: Context) {
-    
+
     companion object {
         private const val TAG = "ComponentManager"
-        
+
         @Volatile
         private var instance: ComponentManager? = null
-        
+
         /**
          * Gets the singleton instance of ComponentManager.
-         * 
+         *
          * @param context Application context
          * @return ComponentManager instance
          */
@@ -48,7 +48,7 @@ class ComponentManager private constructor(private val context: Context) {
                 instance ?: ComponentManager(context.applicationContext).also { instance = it }
             }
         }
-        
+
         /**
          * Clears the singleton instance.
          * Should be called when the application is being destroyed.
@@ -60,66 +60,81 @@ class ComponentManager private constructor(private val context: Context) {
             }
         }
     }
-    
+
     // Settings manager - always available
     val settingsManager: SettingsManager by lazy {
         SettingsManager(context)
     }
-    
+
     // History manager - always available
     val historyManager: HistoryManager by lazy {
         HistoryManager.getInstance(context)
     }
-    
-    // User service reference - set when Shizuku connects
+
+    // User service reference - set when Shizuku connects or SystemService is initialized
     private var userService: IUserService? = null
-    
+
+    // System service instance (for system build)
+    private var systemService: SystemService? = null
+
     // Lazily initialized components that depend on UserService
     private var _deviceExecutor: DeviceExecutor? = null
     private var _textInputManager: TextInputManager? = null
     private var _screenshotService: ScreenshotService? = null
     private var _actionHandler: ActionHandler? = null
     private var _phoneAgent: PhoneAgent? = null
-    
+
+    /**
+     * Initializes SystemService for system build.
+     * This should be called early in the application lifecycle when running in system image.
+     */
+    fun initializeSystemService() {
+        if (systemService == null) {
+            Logger.i(TAG, "Initializing SystemService for system build")
+            systemService = SystemService(context)
+            onServiceConnected(systemService!!)
+        }
+    }
+
     // Components that don't depend on UserService
     private var _modelClient: ModelClient? = null
     private var _appResolver: AppResolver? = null
     private var _swipeGenerator: HumanizedSwipeGenerator? = null
-    
+
     /**
      * Checks if the UserService is connected.
      */
     val isServiceConnected: Boolean
-        get() = userService != null
-    
+        get() = userService != null || systemService != null
+
     /**
      * Gets the DeviceExecutor instance.
      * Requires UserService to be connected.
      */
     val deviceExecutor: DeviceExecutor?
         get() = _deviceExecutor
-    
+
     /**
      * Gets the ScreenshotService instance.
      * Requires UserService to be connected.
      */
     val screenshotService: ScreenshotService?
         get() = _screenshotService
-    
+
     /**
      * Gets the ActionHandler instance.
      * Requires UserService to be connected.
      */
     val actionHandler: ActionHandler?
         get() = _actionHandler
-    
+
     /**
      * Gets the PhoneAgent instance.
      * Requires UserService to be connected.
      */
     val phoneAgent: PhoneAgent?
         get() = _phoneAgent
-    
+
     /**
      * Gets the ModelClient instance.
      * Creates a new instance if config has changed.
@@ -132,7 +147,7 @@ class ComponentManager private constructor(private val context: Context) {
             }
             return _modelClient!!
         }
-    
+
     /**
      * Gets the AppResolver instance.
      */
@@ -143,7 +158,7 @@ class ComponentManager private constructor(private val context: Context) {
             }
             return _appResolver!!
         }
-    
+
     /**
      * Gets the HumanizedSwipeGenerator instance.
      */
@@ -154,14 +169,14 @@ class ComponentManager private constructor(private val context: Context) {
             }
             return _swipeGenerator!!
         }
-    
+
     // Track current model config for change detection
     private var currentModelConfig: ModelConfig? = null
-    
+
     /**
      * Called when UserService connects.
      * Initializes all service-dependent components.
-     * 
+     *
      * @param service The connected UserService
      */
     fun onServiceConnected(service: IUserService) {
@@ -169,7 +184,7 @@ class ComponentManager private constructor(private val context: Context) {
         userService = service
         initializeServiceDependentComponents()
     }
-    
+
     /**
      * Called when UserService disconnects.
      * Cleans up service-dependent components.
@@ -177,25 +192,28 @@ class ComponentManager private constructor(private val context: Context) {
     fun onServiceDisconnected() {
         Logger.i(TAG, "UserService disconnected, cleaning up components")
         userService = null
-        cleanupServiceDependentComponents()
+        // Don't clean up systemService on disconnect - it's always available in system build
+        if (systemService == null) {
+            cleanupServiceDependentComponents()
+        }
     }
-    
+
     /**
      * Initializes components that depend on UserService.
      */
     private fun initializeServiceDependentComponents() {
-        val service = userService ?: return
-        
+        val service = userService ?: systemService ?: return
+
         // Create DeviceExecutor
         _deviceExecutor = DeviceExecutor(service)
-        
+
         // Create TextInputManager
         _textInputManager = TextInputManager(service)
-        
+
         // Create ScreenshotService with floating window controller provider
         // Use a provider function so it can get the current instance dynamically
         _screenshotService = ScreenshotService(service) { FloatingWindowService.getInstance() }
-        
+
         // Create ActionHandler with floating window provider to hide window during touch operations
         _actionHandler = ActionHandler(
             deviceExecutor = _deviceExecutor!!,
@@ -204,7 +222,7 @@ class ComponentManager private constructor(private val context: Context) {
             textInputManager = _textInputManager!!,
             floatingWindowProvider = { FloatingWindowService.getInstance() }
         )
-        
+
         // Create PhoneAgent
         val agentConfig = settingsManager.getAgentConfig()
         _phoneAgent = PhoneAgent(
@@ -214,10 +232,10 @@ class ComponentManager private constructor(private val context: Context) {
             config = agentConfig,
             historyManager = historyManager
         )
-        
+
         Logger.i(TAG, "All service-dependent components initialized")
     }
-    
+
     /**
      * Cleans up components that depend on UserService.
      */
@@ -228,23 +246,23 @@ class ComponentManager private constructor(private val context: Context) {
         _screenshotService = null
         _textInputManager = null
         _deviceExecutor = null
-        
+
         Logger.i(TAG, "Service-dependent components cleaned up")
     }
-    
+
     /**
      * Reinitializes the PhoneAgent with updated configuration.
      * Call this after settings have been changed.
-     * 
+     *
      * Note: This will NOT reinitialize if a task is currently running or paused,
      * to prevent accidentally cancelling user tasks.
      */
     fun reinitializeAgent() {
-        if (userService == null) {
+        if (userService == null && systemService == null) {
             Logger.w(TAG, "Cannot reinitialize agent: UserService not connected")
             return
         }
-        
+
         // Safety check: don't reinitialize while a task is active
         _phoneAgent?.let { agent ->
             if (agent.isRunning() || agent.isPaused()) {
@@ -252,13 +270,13 @@ class ComponentManager private constructor(private val context: Context) {
                 return
             }
         }
-        
+
         // Cancel any running task (should be IDLE at this point, but just in case)
         _phoneAgent?.cancel()
-        
+
         // Recreate model client with new config
         _modelClient = null
-        
+
         // Recreate PhoneAgent
         val agentConfig = settingsManager.getAgentConfig()
         _phoneAgent = PhoneAgent(
@@ -268,28 +286,28 @@ class ComponentManager private constructor(private val context: Context) {
             config = agentConfig,
             historyManager = historyManager
         )
-        
+
         Logger.i(TAG, "PhoneAgent reinitialized with new configuration")
     }
-    
+
     /**
      * Sets the listener for PhoneAgent events.
-     * 
+     *
      * @param listener The listener to set
      */
     fun setPhoneAgentListener(listener: PhoneAgentListener?) {
         _phoneAgent?.setListener(listener)
     }
-    
+
     /**
      * Sets the confirmation callback for ActionHandler.
-     * 
+     *
      * @param callback The callback to set
      */
     fun setConfirmationCallback(callback: ActionHandler.ConfirmationCallback?) {
         _actionHandler?.setConfirmationCallback(callback)
     }
-    
+
     /**
      * Checks if the model config has changed.
      */
@@ -300,7 +318,7 @@ class ComponentManager private constructor(private val context: Context) {
         }
         return changed
     }
-    
+
     /**
      * Cleans up all components.
      * Should be called when the application is being destroyed.
@@ -313,7 +331,7 @@ class ComponentManager private constructor(private val context: Context) {
         _swipeGenerator = null
         currentModelConfig = null
     }
-    
+
     /**
      * Gets the current state summary for debugging.
      */
@@ -321,6 +339,7 @@ class ComponentManager private constructor(private val context: Context) {
         return buildString {
             appendLine("ComponentManager State:")
             appendLine("  - UserService connected: $isServiceConnected")
+            appendLine("  - SystemService: ${if (systemService != null) "initialized" else "null"}")
             appendLine("  - DeviceExecutor: ${if (_deviceExecutor != null) "initialized" else "null"}")
             appendLine("  - ScreenshotService: ${if (_screenshotService != null) "initialized" else "null"}")
             appendLine("  - ActionHandler: ${if (_actionHandler != null) "initialized" else "null"}")

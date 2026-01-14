@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -25,10 +25,10 @@
                 android:id="@+id/backBtn"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Back"
                 android:src="@drawable/ic_arrow_back"
-                app:tint="@color/icon_secondary" />
+                android:tint="@color/icon_secondary" />
 
             <TextView
                 android:layout_width="0dp"
@@ -56,13 +56,11 @@
             android:paddingBottom="32dp">
 
             <!-- Model Settings Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -80,7 +78,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_model"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Model" />
 
                         <LinearLayout
@@ -117,14 +115,21 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
-                        <com.google.android.material.textfield.TextInputLayout
+                        <LinearLayout
                             android:id="@+id/profileSelectorLayout"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-                            android:layout_width="0dp"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="@string/settings_saved_profiles"
-                            app:boxBackgroundColor="@color/surface_variant">
+                            android:orientation="vertical"
+                            android:background="@color/surface_variant"
+                            android:padding="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/settings_saved_profiles"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp"
+                                android:layout_marginBottom="4dp" />
 
                             <AutoCompleteTextView
                                 android:id="@+id/profileSelector"
@@ -132,105 +137,123 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="none"
                                 android:textSize="15sp" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                        </LinearLayout>
 
                         <ImageButton
                             android:id="@+id/btnProfileMenu"
                             android:layout_width="48dp"
                             android:layout_height="48dp"
                             android:layout_marginStart="4dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/settings_profile_menu"
                             android:src="@drawable/ic_more_vert"
-                            app:tint="@color/icon_primary" />
+                            android:tint="@color/icon_primary" />
 
                     </LinearLayout>
 
                     <!-- API Base URL -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/baseUrlLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
-                        android:hint="@string/settings_base_url"
-                        app:boxBackgroundColor="@color/surface_variant">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="20dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_base_url"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/baseUrlInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textUri"
                             android:singleLine="true"
                             android:textSize="15sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Model Name -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/modelNameLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:hint="@string/settings_model_name"
-                        app:boxBackgroundColor="@color/surface_variant">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_model_name"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/modelNameInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="text"
                             android:singleLine="true"
                             android:textSize="15sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- API Key -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/apiKeyLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:hint="@string/settings_api_key"
-                        app:boxBackgroundColor="@color/surface_variant"
-                        app:endIconMode="password_toggle"
-                        app:endIconTint="@color/icon_secondary">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/settings_api_key"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp"
+                                android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/apiKeyInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textPassword"
                             android:singleLine="true"
                             android:textSize="15sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Test Connection Button -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/testConnectionButton"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.App.Button.Secondary"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginTop="16dp"
                         android:text="@string/settings_test_connection"
-                        app:icon="@drawable/ic_wifi"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
+                        android:drawableStart="@drawable/ic_wifi"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Agent Settings Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -248,7 +271,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_tune"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Agent" />
 
                         <LinearLayout
@@ -278,46 +301,58 @@
                     </LinearLayout>
 
                     <!-- Max Steps -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/maxStepsLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
-                        android:hint="@string/settings_max_steps"
-                        app:boxBackgroundColor="@color/surface_variant"
-                        app:helperTextEnabled="true"
-                        app:helperText="@string/settings_max_steps_hint">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="20dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_max_steps"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/maxStepsInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="number"
                             android:singleLine="true"
                             android:textSize="15sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Screenshot Delay -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/screenshotDelayLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:hint="@string/settings_screenshot_delay"
-                        app:boxBackgroundColor="@color/surface_variant"
-                        app:helperTextEnabled="true"
-                        app:helperText="@string/settings_screenshot_delay_hint">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_screenshot_delay"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/screenshotDelayInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="numberDecimal"
                             android:singleLine="true"
                             android:textSize="15sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Language Selection -->
                     <TextView
@@ -357,16 +392,14 @@
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Task Templates Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -384,7 +417,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_list"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Templates" />
 
                         <LinearLayout
@@ -415,10 +448,10 @@
                             android:id="@+id/btnAddTemplate"
                             android:layout_width="40dp"
                             android:layout_height="40dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/settings_add_template"
                             android:src="@drawable/ic_plus"
-                            app:tint="@color/icon_primary" />
+                            android:tint="@color/icon_primary" />
 
                     </LinearLayout>
 
@@ -445,16 +478,14 @@
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Voice Settings Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -473,7 +504,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_mic"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Voice" />
 
                         <LinearLayout
@@ -529,18 +560,16 @@
                     </LinearLayout>
 
                     <!-- Download/Delete Button -->
-                    <com.google.android.material.button.MaterialButton
+                    <Button
                         android:id="@+id/btnVoiceModelAction"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.App.Button.Secondary"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginTop="12dp"
                         android:text="@string/voice_download_model"
-                        app:icon="@drawable/ic_download"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
+                        android:drawableStart="@drawable/ic_download"
+                        android:drawablePadding="8dp"
+                        android:gravity="center_vertical|start" />
 
                     <!-- Continuous Listening Toggle -->
                     <LinearLayout
@@ -558,7 +587,7 @@
                             android:textColor="@color/text_primary"
                             android:textSize="14sp" />
 
-                        <com.google.android.material.materialswitch.MaterialSwitch
+                        <Switch
                             android:id="@+id/switchContinuousListening"
                             style="@style/Widget.App.Switch"
                             android:layout_width="wrap_content"
@@ -567,18 +596,24 @@
                     </LinearLayout>
 
                     <!-- Wake Word Input -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <LinearLayout
                         android:id="@+id/wakeWordLayout"
-                        style="@style/Widget.App.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:hint="@string/voice_wake_word_hint"
-                        app:boxBackgroundColor="@color/surface_variant"
-                        app:helperTextEnabled="true"
-                        app:helperText="@string/voice_wake_word_helper">
+                        android:orientation="vertical"
+                        android:background="@color/surface_variant"
+                        android:padding="12dp"
+                        android:layout_marginTop="16dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/voice_wake_word_hint"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp" />
+
+                        <EditText
                             android:id="@+id/wakeWordInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -586,7 +621,7 @@
                             android:singleLine="true"
                             android:textSize="15sp" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
 
                     <!-- Sensitivity Slider -->
                     <TextView
@@ -611,16 +646,14 @@
                             android:textColor="@color/text_hint"
                             android:textSize="12sp" />
 
-                        <com.google.android.material.slider.Slider
+                        <SeekBar
                             android:id="@+id/sensitivitySlider"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:layout_marginHorizontal="8dp"
-                            android:valueFrom="0"
-                            android:valueTo="100"
-                            android:stepSize="1"
-                            android:value="50" />
+                            android:max="100"
+                            android:progress="50" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -633,16 +666,14 @@
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Advanced Settings Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -660,7 +691,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_code"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Advanced" />
 
                         <LinearLayout
@@ -725,9 +756,9 @@
                             android:textColor="@color/text_hint"
                             android:textSize="12sp" />
 
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/btnEditPromptCn"
-                            style="@style/Widget.Material3.Button.TextButton"
+                            style="@style/Widget.App.Button.Text"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
                             android:text="@string/settings_system_prompt_edit"
@@ -760,9 +791,9 @@
                             android:textColor="@color/text_hint"
                             android:textSize="12sp" />
 
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/btnEditPromptEn"
-                            style="@style/Widget.Material3.Button.TextButton"
+                            style="@style/Widget.App.Button.Text"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
                             android:text="@string/settings_system_prompt_edit"
@@ -772,16 +803,14 @@
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Debug Logs Card -->
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@color/card_background"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
+                android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -799,7 +828,7 @@
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:src="@drawable/ic_bug_report"
-                            app:tint="@color/icon_primary"
+                            android:tint="@color/icon_primary"
                             android:contentDescription="Debug" />
 
                         <LinearLayout
@@ -835,23 +864,21 @@
                         android:layout_marginTop="16dp"
                         android:orientation="horizontal">
 
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/btnExportLogs"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/Widget.App.Button.Secondary"
                             android:layout_width="0dp"
                             android:layout_height="48dp"
                             android:layout_weight="1"
                             android:layout_marginEnd="8dp"
                             android:text="@string/settings_export_logs"
-                            app:icon="@drawable/ic_share"
-                            app:iconGravity="textStart"
-                            app:iconPadding="8dp"
-                            app:strokeColor="@color/primary"
-                            app:strokeWidth="1dp" />
+                            android:drawableStart="@drawable/ic_share"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical|start" />
 
-                        <com.google.android.material.button.MaterialButton
+                        <Button
                             android:id="@+id/btnClearLogs"
-                            style="@style/Widget.Material3.Button.TextButton"
+                            style="@style/Widget.App.Button.Text"
                             android:layout_width="wrap_content"
                             android:layout_height="48dp"
                             android:text="@string/settings_clear_logs"
@@ -861,7 +888,7 @@
 
                 </LinearLayout>
 
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Action Buttons -->
             <LinearLayout
@@ -871,15 +898,15 @@
                 android:layout_marginBottom="80dp"
                 android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/resetButton"
                     style="@style/Widget.App.Button.Tonal"
                     android:layout_width="wrap_content"
                     android:layout_height="52dp"
                     android:text="@string/settings_reset"
-                    app:icon="@drawable/ic_refresh"
-                    app:iconGravity="textStart"
-                    app:iconPadding="8dp" />
+                    android:drawableStart="@drawable/ic_refresh"
+                    android:drawablePadding="8dp"
+                    android:gravity="center_vertical|start" />
 
             </LinearLayout>
 
@@ -889,13 +916,13 @@
     </LinearLayout>
 
     <!-- Floating Save Button -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <ImageButton
         android:id="@+id/saveButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:contentDescription="@string/settings_save"
-        app:srcCompat="@drawable/ic_save" />
+        android:src="@drawable/ic_save" />
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</FrameLayout>

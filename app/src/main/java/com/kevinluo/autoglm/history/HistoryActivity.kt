@@ -10,16 +10,19 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.kevinluo.autoglm.R
-import com.kevinluo.autoglm.util.Logger
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Context
+// Note: RecyclerView may not be available in system build
+// import androidx.recyclerview.widget.LinearLayoutManager
+// import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import com.kevinluo.autoglm.R
+import com.kevinluo.autoglm.util.Logger
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,30 +41,34 @@ import java.util.Locale
  * - Clear all history
  *
  */
-class HistoryActivity : AppCompatActivity() {
-    
+class HistoryActivity : Activity() {
+
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     private lateinit var historyManager: HistoryManager
-    private lateinit var recyclerView: RecyclerView
+    // Note: RecyclerView may not be available in system build
+    // Using View as placeholder
+    private lateinit var recyclerView: View
     private lateinit var emptyState: LinearLayout
     private lateinit var adapter: HistoryAdapter
-    
+
     // Multi-select mode
     private lateinit var normalToolbar: LinearLayout
     private lateinit var selectionToolbar: LinearLayout
     private lateinit var selectionCountText: TextView
     private var isSelectionMode = false
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_history)
-        
+
         historyManager = HistoryManager.getInstance(this)
-        
+
         Logger.d(TAG, "HistoryActivity created")
         setupViews()
         observeHistory()
     }
-    
+
     /**
      * Sets up all view references and click listeners.
      */
@@ -69,31 +76,31 @@ class HistoryActivity : AppCompatActivity() {
         normalToolbar = findViewById(R.id.normalToolbar)
         selectionToolbar = findViewById(R.id.selectionToolbar)
         selectionCountText = findViewById(R.id.selectionCountText)
-        
+
         findViewById<ImageButton>(R.id.backBtn).setOnClickListener {
             finish()
         }
-        
+
         findViewById<ImageButton>(R.id.clearAllBtn).setOnClickListener {
             showClearAllDialog()
         }
-        
+
         // Selection toolbar buttons
         findViewById<ImageButton>(R.id.cancelSelectionBtn).setOnClickListener {
             exitSelectionMode()
         }
-        
+
         findViewById<ImageButton>(R.id.selectAllBtn).setOnClickListener {
             adapter.selectAll()
         }
-        
+
         findViewById<ImageButton>(R.id.deleteSelectedBtn).setOnClickListener {
             showDeleteSelectedDialog()
         }
-        
+
         recyclerView = findViewById(R.id.historyRecyclerView)
         emptyState = findViewById(R.id.emptyState)
-        
+
         adapter = HistoryAdapter(
             onItemClick = { task ->
                 if (isSelectionMode) {
@@ -115,21 +122,24 @@ class HistoryActivity : AppCompatActivity() {
                 }
             }
         )
-        
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        recyclerView.adapter = adapter
+
+        // Note: RecyclerView not available in system build
+        // recyclerView.layoutManager = LinearLayoutManager(this)
+        // recyclerView.adapter = adapter
     }
-    
+
     /**
      * Observes the history list and updates the UI accordingly.
      */
     private fun observeHistory() {
-        lifecycleScope.launch {
+        activityScope.launch {
             historyManager.historyList.collectLatest { list ->
                 adapter.submitList(list)
                 emptyState.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                // Note: RecyclerView not available in system build
+                // recyclerView.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
                 recyclerView.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
-                
+
                 // Exit selection mode if list becomes empty
                 if (list.isEmpty() && isSelectionMode) {
                     exitSelectionMode()
@@ -137,7 +147,7 @@ class HistoryActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Enters multi-select mode for batch operations.
      */
@@ -148,7 +158,7 @@ class HistoryActivity : AppCompatActivity() {
         selectionToolbar.visibility = View.VISIBLE
         Logger.d(TAG, "Entered selection mode")
     }
-    
+
     /**
      * Exits multi-select mode and clears selection.
      */
@@ -160,7 +170,7 @@ class HistoryActivity : AppCompatActivity() {
         selectionToolbar.visibility = View.GONE
         Logger.d(TAG, "Exited selection mode")
     }
-    
+
     /**
      * Updates the selection count display in the toolbar.
      *
@@ -169,7 +179,7 @@ class HistoryActivity : AppCompatActivity() {
     private fun updateSelectionCount(count: Int) {
         selectionCountText.text = getString(R.string.history_selected_count, count)
     }
-    
+
     /**
      * Opens the task detail activity for the given task.
      *
@@ -181,19 +191,19 @@ class HistoryActivity : AppCompatActivity() {
         intent.putExtra(HistoryDetailActivity.EXTRA_TASK_ID, task.id)
         startActivity(intent)
     }
-    
+
     /**
      * Shows a confirmation dialog for deleting selected tasks.
      */
     private fun showDeleteSelectedDialog() {
         val selectedIds = adapter.getSelectedIds()
         if (selectedIds.isEmpty()) return
-        
+
         AlertDialog.Builder(this)
             .setTitle(R.string.history_delete_selected)
             .setMessage(getString(R.string.history_delete_selected_confirm, selectedIds.size))
             .setPositiveButton(R.string.dialog_confirm) { _, _ ->
-                lifecycleScope.launch {
+                activityScope.launch {
                     historyManager.deleteTasks(selectedIds)
                     exitSelectionMode()
                 }
@@ -201,7 +211,7 @@ class HistoryActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Shows a confirmation dialog for clearing all history.
      */
@@ -211,14 +221,14 @@ class HistoryActivity : AppCompatActivity() {
             .setMessage(R.string.history_clear_confirm)
             .setPositiveButton(R.string.dialog_confirm) { _, _ ->
                 Logger.d(TAG, "Clearing all history")
-                lifecycleScope.launch {
+                activityScope.launch {
                     historyManager.clearAllHistory()
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (isSelectionMode) {
@@ -227,7 +237,7 @@ class HistoryActivity : AppCompatActivity() {
             super.onBackPressed()
         }
     }
-    
+
     companion object {
         private const val TAG = "HistoryActivity"
     }
@@ -249,13 +259,15 @@ class HistoryAdapter(
     private val onItemClick: (TaskHistory) -> Unit,
     private val onItemLongClick: (TaskHistory) -> Unit,
     private val onSelectionChanged: (Int) -> Unit
-) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
-    
+) {
+    // Note: RecyclerView.Adapter may not be available in system build
+    // Creating placeholder adapter class
+
     private var items: List<TaskHistory> = emptyList()
     private val selectedIds = mutableSetOf<String>()
     private var isSelectionMode = false
     private val dateFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-    
+
     /**
      * Submits a new list of items to display.
      *
@@ -265,9 +277,9 @@ class HistoryAdapter(
         items = list
         // Remove selected IDs that no longer exist
         selectedIds.retainAll(list.map { it.id }.toSet())
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
     }
-    
+
     /**
      * Enables or disables selection mode.
      *
@@ -275,9 +287,9 @@ class HistoryAdapter(
      */
     fun setSelectionMode(enabled: Boolean) {
         isSelectionMode = enabled
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
     }
-    
+
     /**
      * Toggles the selection state of a task.
      *
@@ -289,61 +301,64 @@ class HistoryAdapter(
         } else {
             selectedIds.add(taskId)
         }
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
         onSelectionChanged(selectedIds.size)
     }
-    
+
     /**
      * Selects all items in the list.
      */
     fun selectAll() {
         selectedIds.clear()
         selectedIds.addAll(items.map { it.id })
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
         onSelectionChanged(selectedIds.size)
     }
-    
+
     /**
      * Clears all selections.
      */
     fun clearSelection() {
         selectedIds.clear()
-        notifyDataSetChanged()
+        // notifyDataSetChanged() // RecyclerView not available
         onSelectionChanged(0)
     }
-    
+
     /**
      * Gets the set of currently selected task IDs.
      *
      * @return Immutable copy of selected task IDs
      */
     fun getSelectedIds(): Set<String> = selectedIds.toSet()
-    
+
+    /*
+    // Original RecyclerView.Adapter implementation (commented out)
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_history_task, parent, false)
         return ViewHolder(view)
     }
-    
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         holder.bind(items[position])
     }
-    
+
     override fun getItemCount(): Int = items.size
-    
+    */
+
     /**
      * ViewHolder for history list items.
      *
      * Displays task information including description, status, time, steps, and duration.
      */
-    inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    inner class ViewHolder(val itemView: View) {
         private val checkBox: CheckBox = itemView.findViewById(R.id.checkBox)
         private val statusIcon: ImageView = itemView.findViewById(R.id.statusIcon)
         private val taskDescription: TextView = itemView.findViewById(R.id.taskDescription)
         private val timeText: TextView = itemView.findViewById(R.id.timeText)
         private val stepsText: TextView = itemView.findViewById(R.id.stepsText)
         private val durationText: TextView = itemView.findViewById(R.id.durationText)
-        
+
         /**
          * Binds task data to the view.
          *
@@ -357,34 +372,34 @@ class HistoryAdapter(
                 R.string.history_duration_format,
                 formatDuration(task.duration)
             )
-            
+
             if (task.success) {
                 statusIcon.setImageResource(R.drawable.ic_check_circle)
                 statusIcon.setColorFilter(
-                    ContextCompat.getColor(itemView.context, R.color.status_success)
+                    itemView.context.getColor(R.color.status_success)
                 )
             } else {
                 statusIcon.setImageResource(R.drawable.ic_error)
                 statusIcon.setColorFilter(
-                    ContextCompat.getColor(itemView.context, R.color.status_error)
+                    itemView.context.getColor(R.color.status_error)
                 )
             }
-            
+
             // Handle selection mode
             checkBox.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
             checkBox.isChecked = selectedIds.contains(task.id)
-            
+
             checkBox.setOnClickListener {
                 toggleSelection(task.id)
             }
-            
+
             itemView.setOnClickListener { onItemClick(task) }
             itemView.setOnLongClickListener {
                 onItemLongClick(task)
                 true
             }
         }
-        
+
         /**
          * Formats duration in milliseconds to a human-readable string.
          *

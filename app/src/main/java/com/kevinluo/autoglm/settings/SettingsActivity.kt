@@ -18,23 +18,21 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import android.app.Activity
+import android.app.AlertDialog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.kevinluo.autoglm.R
 import com.kevinluo.autoglm.agent.AgentConfig
 import com.kevinluo.autoglm.model.ModelClient
 import com.kevinluo.autoglm.model.ModelConfig
 import com.kevinluo.autoglm.util.LogFileManager
 import com.kevinluo.autoglm.util.Logger
-import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.slider.Slider
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Switch
+import android.widget.SeekBar
 import com.kevinluo.autoglm.voice.VoiceModelManager
 import com.kevinluo.autoglm.voice.VoiceModelDownloadListener
 import com.kevinluo.autoglm.voice.ContinuousListeningService
@@ -48,117 +46,117 @@ import kotlinx.coroutines.launch
  * Also provides management of task templates and custom system prompts.
  *
  */
-class SettingsActivity : AppCompatActivity() {
-    
+class SettingsActivity : Activity() {
+
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     private lateinit var settingsManager: SettingsManager
-    
+
+    private val notificationPermissionRequestCode = 2001
+    private val audioPermissionRequestCode = 2002
+
     // Profile selector views
-    private lateinit var profileSelectorLayout: TextInputLayout
+    private lateinit var profileSelectorLayout: LinearLayout
     private lateinit var profileSelector: AutoCompleteTextView
     private lateinit var btnProfileMenu: ImageButton
-    
+
     // Model settings views
-    private lateinit var baseUrlLayout: TextInputLayout
-    private lateinit var baseUrlInput: TextInputEditText
-    private lateinit var modelNameLayout: TextInputLayout
-    private lateinit var modelNameInput: TextInputEditText
-    private lateinit var apiKeyLayout: TextInputLayout
-    private lateinit var apiKeyInput: TextInputEditText
-    
+    private lateinit var baseUrlLayout: LinearLayout
+    private lateinit var baseUrlInput: EditText
+    private lateinit var modelNameLayout: LinearLayout
+    private lateinit var modelNameInput: EditText
+    private lateinit var apiKeyLayout: LinearLayout
+    private lateinit var apiKeyInput: EditText
+
     // Agent settings views
-    private lateinit var maxStepsLayout: TextInputLayout
-    private lateinit var maxStepsInput: TextInputEditText
-    private lateinit var screenshotDelayLayout: TextInputLayout
-    private lateinit var screenshotDelayInput: TextInputEditText
+    private lateinit var maxStepsLayout: LinearLayout
+    private lateinit var maxStepsInput: EditText
+    private lateinit var screenshotDelayLayout: LinearLayout
+    private lateinit var screenshotDelayInput: EditText
     private lateinit var languageRadioGroup: RadioGroup
     private lateinit var languageChinese: RadioButton
     private lateinit var languageEnglish: RadioButton
-    
+
     // Buttons
-    private lateinit var saveButton: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var saveButton: ImageButton
     private lateinit var resetButton: Button
     private lateinit var testConnectionButton: Button
     private lateinit var backBtn: android.widget.ImageButton
-    
+
     // Task templates views
-    private lateinit var templatesRecyclerView: RecyclerView
+    // Note: RecyclerView may not be available in system build
+    // Using View as placeholder - will need to replace with ListView or add RecyclerView dependency
+    private lateinit var templatesRecyclerView: View
     private lateinit var emptyTemplatesText: TextView
     private lateinit var btnAddTemplate: ImageButton
-    private var templatesAdapter: TaskTemplatesAdapter? = null
+    // Note: RecyclerView.Adapter may not be available
+    // private var templatesAdapter: TaskTemplatesAdapter? = null
+    private var templatesAdapter: Any? = null
     private var taskTemplates: MutableList<TaskTemplate> = mutableListOf()
-    
+
     // Advanced settings views
     private lateinit var promptCnStatus: TextView
     private lateinit var promptEnStatus: TextView
     private lateinit var btnEditPromptCn: Button
     private lateinit var btnEditPromptEn: Button
-    
+
     // Debug logs views
     private lateinit var logSizeText: TextView
     private lateinit var btnExportLogs: Button
     private lateinit var btnClearLogs: Button
-    
+
     // Voice settings views
     private lateinit var voiceModelStatus: TextView
-    private lateinit var btnVoiceModelAction: com.google.android.material.button.MaterialButton
-    private lateinit var switchContinuousListening: MaterialSwitch
-    private lateinit var wakeWordInput: TextInputEditText
-    private lateinit var sensitivitySlider: Slider
+    private lateinit var btnVoiceModelAction: Button
+    private lateinit var switchContinuousListening: Switch
+    private lateinit var wakeWordInput: EditText
+    private lateinit var sensitivitySlider: SeekBar
     private var voiceModelManager: VoiceModelManager? = null
-    
+
     // Profile data
     private var savedProfiles: List<SavedModelProfile> = emptyList()
     private var currentProfileId: String? = null
-    
-    // Notification permission launcher for Android 13+
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Permission granted, start the service
-            startContinuousListeningService()
-        } else {
-            // Permission denied, reset the switch
-            switchContinuousListening.isChecked = false
-            settingsManager.setContinuousListening(false)
-            Toast.makeText(this, R.string.voice_notification_permission_required, Toast.LENGTH_LONG).show()
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            notificationPermissionRequestCode -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    startContinuousListeningService()
+                } else {
+                    switchContinuousListening.isChecked = false
+                    settingsManager.setContinuousListening(false)
+                    Toast.makeText(this, getString(R.string.voice_notification_permission_required), Toast.LENGTH_LONG).show()
+                }
+            }
+            audioPermissionRequestCode -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    checkNotificationPermissionAndStart()
+                } else {
+                    switchContinuousListening.isChecked = false
+                    settingsManager.setContinuousListening(false)
+                    Toast.makeText(this, getString(R.string.voice_audio_permission_required), Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
-    
-    // Audio permission launcher for microphone access
-    private val audioPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Audio permission granted, now check notification permission
-            checkNotificationPermissionAndStart()
-        } else {
-            // Permission denied, reset the switch
-            switchContinuousListening.isChecked = false
-            settingsManager.setContinuousListening(false)
-            Toast.makeText(this, R.string.voice_audio_permission_required, Toast.LENGTH_LONG).show()
-        }
-    }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
-        
+
         Logger.d(TAG, "SettingsActivity created")
-        
-        // Setup action bar
-        supportActionBar?.apply {
-            setDisplayHomeAsUpEnabled(true)
-            title = getString(R.string.settings_title)
-        }
-        
+
+        // Note: Standard Activity doesn't have supportActionBar
+        // Action bar setup can be done via layout if needed
+
         settingsManager = SettingsManager(this)
-        
+
         initViews()
         loadCurrentSettings()
         setupListeners()
     }
-    
+
     /**
      * Initializes all view references.
      */
@@ -167,7 +165,7 @@ class SettingsActivity : AppCompatActivity() {
         profileSelectorLayout = findViewById(R.id.profileSelectorLayout)
         profileSelector = findViewById(R.id.profileSelector)
         btnProfileMenu = findViewById(R.id.btnProfileMenu)
-        
+
         // Model settings
         baseUrlLayout = findViewById(R.id.baseUrlLayout)
         baseUrlInput = findViewById(R.id.baseUrlInput)
@@ -175,7 +173,7 @@ class SettingsActivity : AppCompatActivity() {
         modelNameInput = findViewById(R.id.modelNameInput)
         apiKeyLayout = findViewById(R.id.apiKeyLayout)
         apiKeyInput = findViewById(R.id.apiKeyInput)
-        
+
         // Agent settings
         maxStepsLayout = findViewById(R.id.maxStepsLayout)
         maxStepsInput = findViewById(R.id.maxStepsInput)
@@ -184,19 +182,22 @@ class SettingsActivity : AppCompatActivity() {
         languageRadioGroup = findViewById(R.id.languageRadioGroup)
         languageChinese = findViewById(R.id.languageChinese)
         languageEnglish = findViewById(R.id.languageEnglish)
-        
+
         // Buttons
         saveButton = findViewById(R.id.saveButton)
         resetButton = findViewById(R.id.resetButton)
         testConnectionButton = findViewById(R.id.testConnectionButton)
         backBtn = findViewById(R.id.backBtn)
-        
+
         // Task templates
         templatesRecyclerView = findViewById(R.id.templatesRecyclerView)
         emptyTemplatesText = findViewById(R.id.emptyTemplatesText)
         btnAddTemplate = findViewById(R.id.btnAddTemplate)
-        
+
         // Setup templates RecyclerView
+        // Note: RecyclerView may not be available in system build
+        // Commenting out RecyclerView setup for now
+        /*
         templatesRecyclerView.layoutManager = LinearLayoutManager(this)
         templatesAdapter = TaskTemplatesAdapter(
             templates = taskTemplates,
@@ -204,18 +205,19 @@ class SettingsActivity : AppCompatActivity() {
             onDeleteClick = { template -> showDeleteTemplateDialog(template) }
         )
         templatesRecyclerView.adapter = templatesAdapter
-        
+        */
+
         // Advanced settings
         promptCnStatus = findViewById(R.id.promptCnStatus)
         promptEnStatus = findViewById(R.id.promptEnStatus)
         btnEditPromptCn = findViewById(R.id.btnEditPromptCn)
         btnEditPromptEn = findViewById(R.id.btnEditPromptEn)
-        
+
         // Debug logs
         logSizeText = findViewById(R.id.logSizeText)
         btnExportLogs = findViewById(R.id.btnExportLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
-        
+
         // Voice settings
         voiceModelStatus = findViewById(R.id.voiceModelStatus)
         btnVoiceModelAction = findViewById(R.id.btnVoiceModelAction)
@@ -223,7 +225,7 @@ class SettingsActivity : AppCompatActivity() {
         wakeWordInput = findViewById(R.id.wakeWordInput)
         sensitivitySlider = findViewById(R.id.sensitivitySlider)
     }
-    
+
     /**
      * Loads current settings from storage and displays them.
      *
@@ -232,41 +234,41 @@ class SettingsActivity : AppCompatActivity() {
         Logger.d(TAG, "Loading current settings")
         val modelConfig = settingsManager.getModelConfig()
         val agentConfig = settingsManager.getAgentConfig()
-        
+
         // Load saved profiles
         loadSavedProfiles()
-        
+
         // Load task templates
         loadTaskTemplates()
-        
+
         // Update system prompt status
         updatePromptStatus()
-        
+
         // Update log size display
         updateLogSizeDisplay()
-        
+
         // Load voice settings
         loadVoiceSettings()
-        
+
         // Populate model settings
         baseUrlInput.setText(modelConfig.baseUrl)
         modelNameInput.setText(modelConfig.modelName)
         apiKeyInput.setText(if (modelConfig.apiKey == "EMPTY") "" else modelConfig.apiKey)
-        
+
         // Populate agent settings
         maxStepsInput.setText(agentConfig.maxSteps.toString())
         screenshotDelayInput.setText((agentConfig.screenshotDelayMs / 1000.0).toString())
-        
+
         // Set language selection
         when (agentConfig.language) {
             "en" -> languageEnglish.isChecked = true
             else -> languageChinese.isChecked = true
         }
-        
+
         // Clear any previous errors
         clearErrors()
     }
-    
+
     /**
      * Loads saved profiles and updates the dropdown.
      */
@@ -274,14 +276,14 @@ class SettingsActivity : AppCompatActivity() {
         Logger.d(TAG, "Loading saved profiles")
         savedProfiles = settingsManager.getSavedProfiles()
         currentProfileId = settingsManager.getCurrentProfileId()
-        
+
         // Create display names list with "New" option
         val displayNames = mutableListOf(getString(R.string.settings_new_profile))
         displayNames.addAll(savedProfiles.map { it.displayName })
-        
+
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, displayNames)
         profileSelector.setAdapter(adapter)
-        
+
         // Set current selection
         if (currentProfileId != null) {
             val profile = savedProfiles.find { it.id == currentProfileId }
@@ -293,40 +295,41 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             profileSelector.setText(getString(R.string.settings_new_profile), false)
         }
-        
+
         // Update delete button visibility
         updateDeleteButtonVisibility()
     }
-    
+
     /**
      * Updates delete button visibility based on current selection.
      */
     private fun updateDeleteButtonVisibility() {
         // No longer needed with popup menu, but keep for compatibility
     }
-    
+
     /**
      * Sets up click listeners for all interactive views.
      */
     private fun setupListeners() {
         backBtn.setOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
+            @Suppress("DEPRECATION")
+            onBackPressed()
         }
-        
+
         saveButton.setOnClickListener {
             if (validateInput()) {
                 saveSettings()
             }
         }
-        
+
         resetButton.setOnClickListener {
             resetToDefaults()
         }
-        
+
         testConnectionButton.setOnClickListener {
             testModelConnection()
         }
-        
+
         // Profile selector listener
         profileSelector.setOnItemClickListener { _, _, position, _ ->
             if (position == 0) {
@@ -342,17 +345,17 @@ class SettingsActivity : AppCompatActivity() {
             settingsManager.setCurrentProfileId(currentProfileId)
             updateDeleteButtonVisibility()
         }
-        
+
         // Profile menu button
         btnProfileMenu.setOnClickListener { view ->
             showProfileMenu(view)
         }
-        
+
         // Add template button
         btnAddTemplate.setOnClickListener {
             showAddTemplateDialog()
         }
-        
+
         // System prompt edit buttons
         btnEditPromptCn.setOnClickListener {
             showEditPromptDialog("cn")
@@ -360,7 +363,7 @@ class SettingsActivity : AppCompatActivity() {
         btnEditPromptEn.setOnClickListener {
             showEditPromptDialog("en")
         }
-        
+
         // Debug logs buttons
         btnExportLogs.setOnClickListener {
             exportDebugLogs()
@@ -368,7 +371,7 @@ class SettingsActivity : AppCompatActivity() {
         btnClearLogs.setOnClickListener {
             showClearLogsDialog()
         }
-        
+
         // Voice settings listeners
         btnVoiceModelAction.setOnClickListener {
             onVoiceModelActionClick()
@@ -379,19 +382,22 @@ class SettingsActivity : AppCompatActivity() {
             if (!switchContinuousListening.isPressed) {
                 return@setOnCheckedChangeListener
             }
-            
+
             settingsManager.setContinuousListening(isChecked)
             // Start or stop the continuous listening service based on the switch state
             if (isChecked) {
                 if (settingsManager.isVoiceModelDownloaded()) {
                     // Check audio permission first (required for foreground service with microphone type)
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
-                        != PackageManager.PERMISSION_GRANTED) {
-                        // Request audio permission
-                        audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    if (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+                    } else {
+                        false
+                    }) {
+                        // Request permission
+                        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioPermissionRequestCode)
                         return@setOnCheckedChangeListener
                     }
-                    // Audio permission granted, check notification permission
+                    // Permission already granted, check notification permission
                     checkNotificationPermissionAndStart()
                 } else {
                     // Model not downloaded, disable the switch and show a message
@@ -410,19 +416,23 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        sensitivitySlider.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                settingsManager.setWakeWordSensitivity(value / 100f)
+        sensitivitySlider.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    settingsManager.setWakeWordSensitivity(progress / 100f)
+                }
             }
-        }
-        
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
         // Clear errors on text change
-        baseUrlInput.setOnFocusChangeListener { _, _ -> baseUrlLayout.error = null }
-        modelNameInput.setOnFocusChangeListener { _, _ -> modelNameLayout.error = null }
-        maxStepsInput.setOnFocusChangeListener { _, _ -> maxStepsLayout.error = null }
-        screenshotDelayInput.setOnFocusChangeListener { _, _ -> screenshotDelayLayout.error = null }
+        baseUrlInput.setOnFocusChangeListener { _, _ -> baseUrlInput.error = null }
+        modelNameInput.setOnFocusChangeListener { _, _ -> modelNameInput.error = null }
+        maxStepsInput.setOnFocusChangeListener { _, _ -> maxStepsInput.error = null }
+        screenshotDelayInput.setOnFocusChangeListener { _, _ -> screenshotDelayInput.error = null }
     }
-    
+
     /**
      * Clears model configuration fields for new profile.
      */
@@ -431,7 +441,7 @@ class SettingsActivity : AppCompatActivity() {
         modelNameInput.setText("")
         apiKeyInput.setText("")
     }
-    
+
     /**
      * Loads a profile's configuration into the input fields.
      */
@@ -440,7 +450,7 @@ class SettingsActivity : AppCompatActivity() {
         modelNameInput.setText(profile.config.modelName)
         apiKeyInput.setText(if (profile.config.apiKey == "EMPTY") "" else profile.config.apiKey)
     }
-    
+
     /**
      * Shows the profile action menu.
      *
@@ -449,11 +459,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun showProfileMenu(anchor: android.view.View) {
         val popup = PopupMenu(this, anchor)
         popup.menuInflater.inflate(R.menu.menu_profile, popup.menu)
-        
+
         // Disable delete and copy if no profile is selected
         popup.menu.findItem(R.id.action_delete_profile)?.isEnabled = currentProfileId != null
         popup.menu.findItem(R.id.action_copy_profile)?.isEnabled = currentProfileId != null
-        
+
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_save_profile -> {
@@ -471,15 +481,15 @@ class SettingsActivity : AppCompatActivity() {
                 else -> false
             }
         }
-        
+
         popup.show()
     }
-    
+
     /**
      * Shows dialog to save current configuration as a profile.
      */
     private fun showSaveProfileDialog() {
-        val editText = TextInputEditText(this).apply {
+        val editText = EditText(this).apply {
             hint = getString(R.string.settings_profile_name_hint)
             // Pre-fill with current profile name if editing
             currentProfileId?.let { id ->
@@ -488,17 +498,18 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-        
-        val layout = TextInputLayout(this).apply {
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             addView(editText)
             setPadding(48, 16, 48, 0)
         }
-        
+
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_save_profile)
             .setView(layout)
             .setPositiveButton(R.string.dialog_confirm) { _, _ ->
-                val name = editText.text?.toString()?.trim() ?: ""
+                val name = editText.text.toString().trim()
                 if (name.isEmpty()) {
                     Toast.makeText(this, R.string.settings_profile_name_empty, Toast.LENGTH_SHORT).show()
                 } else {
@@ -508,7 +519,7 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Saves current model configuration as a profile.
      *
@@ -518,31 +529,31 @@ class SettingsActivity : AppCompatActivity() {
         Logger.d(TAG, "Saving current configuration as profile: $displayName")
         val baseUrl = baseUrlInput.text?.toString()?.trim() ?: ""
         val modelName = modelNameInput.text?.toString()?.trim() ?: ""
-        val apiKey = apiKeyInput.text?.toString()?.trim().let { 
-            if (it.isNullOrEmpty()) "EMPTY" else it 
+        val apiKey = apiKeyInput.text?.toString()?.trim().let {
+            if (it.isNullOrEmpty()) "EMPTY" else it
         }
-        
+
         val config = ModelConfig(
             baseUrl = baseUrl,
             apiKey = apiKey,
             modelName = modelName
         )
-        
+
         val profileId = currentProfileId ?: settingsManager.generateProfileId()
         val profile = SavedModelProfile(
             id = profileId,
             displayName = displayName,
             config = config
         )
-        
+
         settingsManager.saveProfile(profile)
         currentProfileId = profileId
         settingsManager.setCurrentProfileId(profileId)
-        
+
         loadSavedProfiles()
         Toast.makeText(this, R.string.settings_profile_saved, Toast.LENGTH_SHORT).show()
     }
-    
+
     /**
      * Copies the current profile with a new name.
      */
@@ -551,43 +562,43 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.settings_profile_name_empty, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         val currentProfile = savedProfiles.find { it.id == currentProfileId } ?: return
         val newName = getString(R.string.settings_copy_profile_name, currentProfile.displayName)
-        
+
         val baseUrl = baseUrlInput.text?.toString()?.trim() ?: ""
         val modelName = modelNameInput.text?.toString()?.trim() ?: ""
-        val apiKey = apiKeyInput.text?.toString()?.trim().let { 
-            if (it.isNullOrEmpty()) "EMPTY" else it 
+        val apiKey = apiKeyInput.text?.toString()?.trim().let {
+            if (it.isNullOrEmpty()) "EMPTY" else it
         }
-        
+
         val config = ModelConfig(
             baseUrl = baseUrl,
             apiKey = apiKey,
             modelName = modelName
         )
-        
+
         val newProfileId = settingsManager.generateProfileId()
         val newProfile = SavedModelProfile(
             id = newProfileId,
             displayName = newName,
             config = config
         )
-        
+
         settingsManager.saveProfile(newProfile)
         currentProfileId = newProfileId
         settingsManager.setCurrentProfileId(newProfileId)
-        
+
         loadSavedProfiles()
         Toast.makeText(this, R.string.settings_profile_copied, Toast.LENGTH_SHORT).show()
     }
-    
+
     /**
      * Shows confirmation dialog to delete current profile.
      */
     private fun showDeleteProfileDialog() {
         if (currentProfileId == null) return
-        
+
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_delete_profile)
             .setMessage(R.string.settings_delete_profile_confirm)
@@ -597,7 +608,7 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Deletes the currently selected profile.
      */
@@ -611,7 +622,7 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.settings_profile_deleted, Toast.LENGTH_SHORT).show()
         }
     }
-    
+
     /**
      * Validates user input before saving.
      *
@@ -622,40 +633,40 @@ class SettingsActivity : AppCompatActivity() {
         Logger.d(TAG, "Validating input")
         var isValid = true
         clearErrors()
-        
+
         // Validate base URL
-        val baseUrl = baseUrlInput.text?.toString()?.trim() ?: ""
+        val baseUrl = baseUrlInput.text.toString().trim()
         if (baseUrl.isEmpty() || !isValidUrl(baseUrl)) {
-            baseUrlLayout.error = getString(R.string.settings_validation_error_url)
+            baseUrlInput.error = getString(R.string.settings_validation_error_url)
             isValid = false
         }
-        
+
         // Validate model name
-        val modelName = modelNameInput.text?.toString()?.trim() ?: ""
+        val modelName = modelNameInput.text.toString().trim()
         if (modelName.isEmpty()) {
-            modelNameLayout.error = getString(R.string.settings_validation_error_model)
+            modelNameInput.error = getString(R.string.settings_validation_error_model)
             isValid = false
         }
-        
+
         // Validate max steps (0 means unlimited, negative not allowed)
-        val maxStepsStr = maxStepsInput.text?.toString()?.trim() ?: ""
+        val maxStepsStr = maxStepsInput.text.toString().trim()
         val maxSteps = maxStepsStr.toIntOrNull()
         if (maxSteps == null || maxSteps < 0) {
-            maxStepsLayout.error = getString(R.string.settings_validation_error_steps)
+            maxStepsInput.error = getString(R.string.settings_validation_error_steps)
             isValid = false
         }
-        
+
         // Validate screenshot delay
-        val screenshotDelayStr = screenshotDelayInput.text?.toString()?.trim() ?: ""
+        val screenshotDelayStr = screenshotDelayInput.text.toString().trim()
         val screenshotDelay = screenshotDelayStr.toDoubleOrNull() ?: -1.0
         if (screenshotDelay < 0) {
-            screenshotDelayLayout.error = getString(R.string.settings_validation_error_delay)
+            screenshotDelayInput.error = getString(R.string.settings_validation_error_delay)
             isValid = false
         }
-        
+
         return isValid
     }
-    
+
     /**
      * Checks if a string is a valid URL.
      *
@@ -670,34 +681,36 @@ class SettingsActivity : AppCompatActivity() {
             false
         }
     }
-    
+
     /**
      * Clears all error messages from input fields.
      */
     private fun clearErrors() {
-        baseUrlLayout.error = null
-        modelNameLayout.error = null
-        apiKeyLayout.error = null
-        maxStepsLayout.error = null
-        screenshotDelayLayout.error = null
+        // Note: Standard EditText doesn't have error property like TextInputLayout
+        // Error handling can be done via setError() on EditText if needed
+        baseUrlInput.error = null
+        modelNameInput.error = null
+        apiKeyInput.error = null
+        maxStepsInput.error = null
+        screenshotDelayInput.error = null
     }
-    
+
     /**
      * Saves the current settings to storage.
      *
      */
     private fun saveSettings() {
         Logger.i(TAG, "Saving settings")
-        val baseUrl = baseUrlInput.text?.toString()?.trim() ?: ""
-        val modelName = modelNameInput.text?.toString()?.trim() ?: ""
-        val apiKey = apiKeyInput.text?.toString()?.trim().let { 
-            if (it.isNullOrEmpty()) "EMPTY" else it 
+        val baseUrl = baseUrlInput.text.toString().trim()
+        val modelName = modelNameInput.text.toString().trim()
+        val apiKey = apiKeyInput.text.toString().trim().let {
+            if (it.isEmpty()) "EMPTY" else it
         }
-        val maxSteps = maxStepsInput.text?.toString()?.trim()?.toIntOrNull() ?: 100
-        val screenshotDelaySeconds = screenshotDelayInput.text?.toString()?.trim()?.toDoubleOrNull() ?: 2.0
+        val maxSteps = maxStepsInput.text.toString().trim().toIntOrNull() ?: 100
+        val screenshotDelaySeconds = screenshotDelayInput.text.toString().trim().toDoubleOrNull() ?: 2.0
         val screenshotDelayMs = (screenshotDelaySeconds * 1000).toLong()
         val language = if (languageEnglish.isChecked) "en" else "cn"
-        
+
         // Create and save model config
         val modelConfig = ModelConfig(
             baseUrl = baseUrl,
@@ -705,7 +718,7 @@ class SettingsActivity : AppCompatActivity() {
             modelName = modelName
         )
         settingsManager.saveModelConfig(modelConfig)
-        
+
         // Create and save agent config
         val agentConfig = AgentConfig(
             maxSteps = maxSteps,
@@ -713,10 +726,10 @@ class SettingsActivity : AppCompatActivity() {
             screenshotDelayMs = screenshotDelayMs
         )
         settingsManager.saveAgentConfig(agentConfig)
-        
+
         // Save wake words
         saveWakeWords()
-        
+
         // Restart continuous listening service if running to apply new wake words
         if (ContinuousListeningService.isRunning()) {
             Logger.i(TAG, "Restarting continuous listening service to apply new wake words")
@@ -726,11 +739,11 @@ class SettingsActivity : AppCompatActivity() {
                 ContinuousListeningService.start(this)
             }, 500)
         }
-        
+
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
         finish()
     }
-    
+
     /**
      * Resets all settings to default values.
      */
@@ -740,7 +753,7 @@ class SettingsActivity : AppCompatActivity() {
         loadCurrentSettings()
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }
-    
+
     /**
      * Tests the model connection with current configuration.
      */
@@ -748,16 +761,16 @@ class SettingsActivity : AppCompatActivity() {
         Logger.d(TAG, "Testing model connection")
         val baseUrl = baseUrlInput.text?.toString()?.trim() ?: ""
         val modelName = modelNameInput.text?.toString()?.trim() ?: ""
-        val apiKey = apiKeyInput.text?.toString()?.trim().let { 
-            if (it.isNullOrEmpty()) "EMPTY" else it 
+        val apiKey = apiKeyInput.text?.toString()?.trim().let {
+            if (it.isNullOrEmpty()) "EMPTY" else it
         }
-        
+
         // Validate required fields
         if (baseUrl.isEmpty() || !isValidUrl(baseUrl) || modelName.isEmpty()) {
             Toast.makeText(this, R.string.settings_test_invalid_config, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         // Create temporary config for testing
         val testConfig = ModelConfig(
             baseUrl = baseUrl,
@@ -765,64 +778,66 @@ class SettingsActivity : AppCompatActivity() {
             modelName = modelName,
             timeoutSeconds = 30 // Shorter timeout for testing
         )
-        
+
         val client = ModelClient(testConfig)
-        
+
         // Update UI to show testing state
         testConnectionButton.isEnabled = false
         testConnectionButton.text = getString(R.string.settings_testing)
-        
-        lifecycleScope.launch {
+
+        activityScope.launch {
             val result = client.testConnection()
-            
+
             Logger.d(TAG, "Connection test result: $result")
-            
+
             // Update UI on main thread
             testConnectionButton.isEnabled = true
             testConnectionButton.text = getString(R.string.settings_test_connection)
-            
+
             val message = when (result) {
-                is ModelClient.TestResult.Success -> 
+                is ModelClient.TestResult.Success ->
                     getString(R.string.settings_test_success, result.latencyMs)
-                is ModelClient.TestResult.AuthError -> 
+                is ModelClient.TestResult.AuthError ->
                     getString(R.string.settings_test_auth_error, result.message)
-                is ModelClient.TestResult.ModelNotFound -> 
+                is ModelClient.TestResult.ModelNotFound ->
                     getString(R.string.settings_test_model_not_found, result.message)
-                is ModelClient.TestResult.ServerError -> 
+                is ModelClient.TestResult.ServerError ->
                     getString(R.string.settings_test_server_error, result.code, result.message)
-                is ModelClient.TestResult.ConnectionError -> 
+                is ModelClient.TestResult.ConnectionError ->
                     getString(R.string.settings_test_connection_error, result.message)
-                is ModelClient.TestResult.Timeout -> 
+                is ModelClient.TestResult.Timeout ->
                     getString(R.string.settings_test_timeout, result.message)
             }
-            
+
             Toast.makeText(this@SettingsActivity, message, Toast.LENGTH_LONG).show()
         }
     }
-    
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
                 Logger.d(TAG, "Back button pressed")
-                onBackPressedDispatcher.onBackPressed()
+                @Suppress("DEPRECATION")
+                onBackPressed()
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
-    
+
     // ==================== Task Templates ====================
-    
+
     /**
      * Loads task templates from storage.
      */
     private fun loadTaskTemplates() {
         taskTemplates.clear()
         taskTemplates.addAll(settingsManager.getTaskTemplates())
-        templatesAdapter?.notifyDataSetChanged()
+        // Note: RecyclerView adapter methods may not be available
+        // templatesAdapter?.notifyDataSetChanged()
         updateTemplatesEmptyState()
     }
-    
+
     /**
      * Updates the empty state visibility for templates.
      */
@@ -835,21 +850,21 @@ class SettingsActivity : AppCompatActivity() {
             emptyTemplatesText.visibility = View.GONE
         }
     }
-    
+
     /**
      * Shows dialog to add a new template.
      */
     private fun showAddTemplateDialog() {
         showTemplateDialog(null)
     }
-    
+
     /**
      * Shows dialog to edit an existing template.
      */
     private fun showEditTemplateDialog(template: TaskTemplate) {
         showTemplateDialog(template)
     }
-    
+
     /**
      * Shows dialog to add or edit a template.
      *
@@ -857,26 +872,26 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun showTemplateDialog(template: TaskTemplate?) {
         val isEdit = template != null
-        
+
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_task_template, null)
-        val nameInput = dialogView.findViewById<TextInputEditText>(R.id.templateNameInput)
-        val descInput = dialogView.findViewById<TextInputEditText>(R.id.templateDescriptionInput)
-        val nameLayout = dialogView.findViewById<TextInputLayout>(R.id.templateNameLayout)
-        val descLayout = dialogView.findViewById<TextInputLayout>(R.id.templateDescriptionLayout)
-        
+        val nameInput = dialogView.findViewById<EditText>(R.id.templateNameInput)
+        val descInput = dialogView.findViewById<EditText>(R.id.templateDescriptionInput)
+        val nameLayout = dialogView.findViewById<LinearLayout>(R.id.templateNameLayout)
+        val descLayout = dialogView.findViewById<LinearLayout>(R.id.templateDescriptionLayout)
+
         // Pre-fill if editing
         if (isEdit) {
             nameInput.setText(template!!.name)
             descInput.setText(template.description)
         }
-        
+
         AlertDialog.Builder(this)
             .setTitle(if (isEdit) R.string.settings_edit_template else R.string.settings_add_template)
             .setView(dialogView)
             .setPositiveButton(R.string.dialog_confirm) { _, _ ->
-                val name = nameInput.text?.toString()?.trim() ?: ""
-                val description = descInput.text?.toString()?.trim() ?: ""
-                
+                val name = nameInput.text.toString().trim()
+                val description = descInput.text.toString().trim()
+
                 if (name.isEmpty()) {
                     Toast.makeText(this, R.string.settings_template_name_empty, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
@@ -885,7 +900,7 @@ class SettingsActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.settings_template_desc_empty, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                
+
                 val newTemplate = TaskTemplate(
                     id = template?.id ?: settingsManager.generateTemplateId(),
                     name = name,
@@ -898,7 +913,7 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Shows confirmation dialog to delete a template.
      *
@@ -916,7 +931,7 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     /**
      * Adapter for task templates RecyclerView.
      *
@@ -924,25 +939,28 @@ class SettingsActivity : AppCompatActivity() {
      * @property onEditClick Callback when edit button is clicked
      * @property onDeleteClick Callback when delete button is clicked
      */
+    // Note: RecyclerView.Adapter may not be available in system build
+    // Commenting out TaskTemplatesAdapter for now
+    /*
     private inner class TaskTemplatesAdapter(
         private val templates: List<TaskTemplate>,
         private val onEditClick: (TaskTemplate) -> Unit,
         private val onDeleteClick: (TaskTemplate) -> Unit
     ) : RecyclerView.Adapter<TaskTemplatesAdapter.ViewHolder>() {
-        
+
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val nameText: TextView = view.findViewById(R.id.templateName)
             val descText: TextView = view.findViewById(R.id.templateDescription)
             val editBtn: ImageButton = view.findViewById(R.id.btnEdit)
             val deleteBtn: ImageButton = view.findViewById(R.id.btnDelete)
         }
-        
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_task_template, parent, false)
             return ViewHolder(view)
         }
-        
+
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val template = templates[position]
             holder.nameText.text = template.name
@@ -950,12 +968,13 @@ class SettingsActivity : AppCompatActivity() {
             holder.editBtn.setOnClickListener { onEditClick(template) }
             holder.deleteBtn.setOnClickListener { onDeleteClick(template) }
         }
-        
+
         override fun getItemCount() = templates.size
     }
-    
+    */
+
     // ==================== System Prompt ====================
-    
+
     /**
      * Updates the status text for system prompts.
      */
@@ -965,14 +984,14 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             getString(R.string.settings_system_prompt_default)
         }
-        
+
         promptEnStatus.text = if (settingsManager.hasCustomSystemPrompt("en")) {
             getString(R.string.settings_system_prompt_custom)
         } else {
             getString(R.string.settings_system_prompt_default)
         }
     }
-    
+
     /**
      * Shows dialog to edit system prompt.
      *
@@ -981,11 +1000,9 @@ class SettingsActivity : AppCompatActivity() {
     private fun showEditPromptDialog(language: String) {
         Logger.d(TAG, "Showing edit prompt dialog for language: $language")
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_system_prompt, null)
-        val promptInput = dialogView.findViewById<
-            com.google.android.material.textfield.TextInputEditText
-        >(R.id.promptInput)
+        val promptInput = dialogView.findViewById<EditText>(R.id.promptInput)
         val btnReset = dialogView.findViewById<Button>(R.id.btnResetPrompt)
-        
+
         // Get current prompt (custom or default template with placeholder)
         val currentPrompt = settingsManager.getCustomSystemPrompt(language)
             ?: if (language == "en") {
@@ -994,18 +1011,18 @@ class SettingsActivity : AppCompatActivity() {
                 com.kevinluo.autoglm.config.SystemPrompts.getChinesePromptTemplate()
             }
         promptInput.setText(currentPrompt)
-        
+
         val title = if (language == "en") {
             getString(R.string.settings_system_prompt_en)
         } else {
             getString(R.string.settings_system_prompt_cn)
         }
-        
+
         val dialog = AlertDialog.Builder(this)
             .setTitle(title)
             .setView(dialogView)
             .setPositiveButton(R.string.dialog_confirm) { _, _ ->
-                val newPrompt = promptInput.text?.toString() ?: ""
+                val newPrompt = promptInput.text.toString()
                 if (newPrompt.isNotBlank()) {
                     settingsManager.saveCustomSystemPrompt(language, newPrompt)
                     // Update SystemPrompts singleton
@@ -1020,7 +1037,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .create()
-        
+
         // Reset button handler
         btnReset.setOnClickListener {
             AlertDialog.Builder(this)
@@ -1041,10 +1058,10 @@ class SettingsActivity : AppCompatActivity() {
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show()
         }
-        
+
         dialog.show()
     }
-    
+
     /**
      * Checks notification permission and starts the service if granted.
      * Called after audio permission is confirmed.
@@ -1052,17 +1069,21 @@ class SettingsActivity : AppCompatActivity() {
     private fun checkNotificationPermissionAndStart() {
         // Check notification permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) 
-                != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                } else {
+                    false
+                }) {
                 // Request notification permission
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notificationPermissionRequestCode)
                 return
             }
         }
         // All permissions granted, start the service
         startContinuousListeningService()
     }
-    
+
     /**
      * Starts the continuous listening service after permission checks pass.
      */
@@ -1070,13 +1091,13 @@ class SettingsActivity : AppCompatActivity() {
         ContinuousListeningService.start(this)
         Toast.makeText(this, R.string.voice_listening_started, Toast.LENGTH_SHORT).show()
     }
-    
+
     companion object {
         private const val TAG = "SettingsActivity"
     }
-    
+
     // ==================== Debug Logs ====================
-    
+
     /**
      * Updates the log size display text.
      */
@@ -1085,19 +1106,19 @@ class SettingsActivity : AppCompatActivity() {
         val formattedSize = LogFileManager.formatSize(totalSize)
         logSizeText.text = getString(R.string.settings_debug_logs_size, formattedSize)
     }
-    
+
     /**
      * Exports debug logs and opens share dialog.
      */
     private fun exportDebugLogs() {
         Logger.i(TAG, "Exporting debug logs")
-        
+
         val logFiles = LogFileManager.getLogFiles()
         if (logFiles.isEmpty()) {
             Toast.makeText(this, R.string.settings_logs_empty, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         val shareIntent = LogFileManager.exportLogs(this)
         if (shareIntent != null) {
             startActivity(Intent.createChooser(shareIntent, getString(R.string.settings_export_logs)))
@@ -1105,7 +1126,7 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.settings_logs_export_failed, Toast.LENGTH_SHORT).show()
         }
     }
-    
+
     /**
      * Shows confirmation dialog to clear all logs.
      */
@@ -1121,7 +1142,7 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
-    
+
     // ==================== Voice Settings ====================
 
     /**
@@ -1129,25 +1150,25 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun loadVoiceSettings() {
         Logger.d(TAG, "Loading voice settings")
-        
+
         // Initialize voice model manager
         if (voiceModelManager == null) {
             voiceModelManager = VoiceModelManager(this)
         }
-        
+
         // Update model status
         updateVoiceModelStatus()
-        
+
         // Load continuous listening setting
         switchContinuousListening.isChecked = settingsManager.isContinuousListeningEnabled()
-        
+
         // Load wake words
         val wakeWords = settingsManager.getWakeWordsList()
         wakeWordInput.setText(wakeWords.joinToString(", "))
-        
+
         // Load sensitivity
         val sensitivity = settingsManager.getWakeWordSensitivity()
-        sensitivitySlider.value = sensitivity * 100f
+        sensitivitySlider.progress = (sensitivity * 100f).toInt()
     }
 
     /**
@@ -1155,18 +1176,18 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun updateVoiceModelStatus() {
         val isDownloaded = voiceModelManager?.isModelDownloaded() == true
-        
+
         if (isDownloaded) {
             val sizeMB = voiceModelManager?.getDownloadedModelSizeMB() ?: 0
             voiceModelStatus.text = getString(R.string.voice_model_downloaded, sizeMB)
             voiceModelStatus.setTextColor(getColor(R.color.status_running))
             btnVoiceModelAction.text = getString(R.string.voice_delete_model)
-            btnVoiceModelAction.setIconResource(R.drawable.ic_delete)
+            // Note: Standard Button doesn't have setIconResource, icon can be set via compoundDrawables
         } else {
             voiceModelStatus.text = getString(R.string.voice_model_not_downloaded)
             voiceModelStatus.setTextColor(getColor(R.color.text_secondary))
             btnVoiceModelAction.text = getString(R.string.voice_download_model)
-            btnVoiceModelAction.setIconResource(R.drawable.ic_download)
+            // Note: Standard Button doesn't have setIconResource, icon can be set via compoundDrawables
         }
     }
 
@@ -1175,7 +1196,7 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun onVoiceModelActionClick() {
         val isDownloaded = voiceModelManager?.isModelDownloaded() == true
-        
+
         if (isDownloaded) {
             showDeleteModelDialog()
         } else {
@@ -1188,7 +1209,7 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun showDownloadModelDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_voice_download_confirm, null)
-        
+
         AlertDialog.Builder(this)
             .setView(dialogView)
             .setPositiveButton(R.string.voice_download_confirm_title) { _, _ ->
@@ -1205,7 +1226,7 @@ class SettingsActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_voice_download_progress, null)
         val progressBar = dialogView.findViewById<android.widget.ProgressBar>(R.id.downloadProgressBar)
         val progressText = dialogView.findViewById<TextView>(R.id.downloadProgressText)
-        
+
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
@@ -1213,17 +1234,17 @@ class SettingsActivity : AppCompatActivity() {
                 voiceModelManager?.cancelDownload()
             }
             .create()
-        
+
         dialog.show()
-        
-        lifecycleScope.launch {
+
+        activityScope.launch {
             voiceModelManager?.downloadModel(object : VoiceModelDownloadListener {
                 override fun onDownloadStarted() {
                     runOnUiThread {
                         progressText.text = getString(R.string.voice_download_status_preparing)
                     }
                 }
-                
+
                 override fun onDownloadProgress(progress: Int, downloadedBytes: Long, totalBytes: Long) {
                     runOnUiThread {
                         progressBar.progress = progress
@@ -1232,7 +1253,7 @@ class SettingsActivity : AppCompatActivity() {
                         progressText.text = getString(R.string.voice_downloading_progress, progress)
                     }
                 }
-                
+
                 override fun onDownloadCompleted(modelPath: String) {
                     runOnUiThread {
                         dialog.dismiss()
@@ -1241,14 +1262,14 @@ class SettingsActivity : AppCompatActivity() {
                         Toast.makeText(this@SettingsActivity, R.string.voice_download_complete, Toast.LENGTH_SHORT).show()
                     }
                 }
-                
+
                 override fun onDownloadFailed(error: String) {
                     runOnUiThread {
                         dialog.dismiss()
                         Toast.makeText(this@SettingsActivity, getString(R.string.voice_download_failed, error), Toast.LENGTH_LONG).show()
                     }
                 }
-                
+
                 override fun onDownloadCancelled() {
                     runOnUiThread {
                         dialog.dismiss()
@@ -1290,7 +1311,7 @@ class SettingsActivity : AppCompatActivity() {
      * Saves wake words from input.
      */
     private fun saveWakeWords() {
-        val input = wakeWordInput.text?.toString() ?: ""
+        val input = wakeWordInput.text.toString()
         val wakeWords = input.split(",", "，")
             .map { it.trim() }
             .filter { it.isNotEmpty() }

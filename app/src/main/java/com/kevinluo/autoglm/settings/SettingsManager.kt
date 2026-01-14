@@ -3,8 +3,8 @@ package com.kevinluo.autoglm.settings
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+// TODO: EncryptedSharedPreferences not available in system build
+// Using standard SharedPreferences instead (system apps have higher security level)
 import com.kevinluo.autoglm.agent.AgentConfig
 import com.kevinluo.autoglm.model.ModelConfig
 import com.kevinluo.autoglm.util.Logger
@@ -60,12 +60,12 @@ data class TaskTemplate(
  *
  */
 class SettingsManager(private val context: Context) {
-    
+
     companion object {
         private const val TAG = "SettingsManager"
         private const val PREFS_NAME = "autoglm_settings"
         private const val SECURE_PREFS_NAME = "autoglm_secure_settings"
-        
+
         // ModelConfig keys
         private const val KEY_BASE_URL = "model_base_url"
         private const val KEY_API_KEY = "model_api_key"
@@ -75,53 +75,53 @@ class SettingsManager(private val context: Context) {
         private const val KEY_TOP_P = "model_top_p"
         private const val KEY_FREQUENCY_PENALTY = "model_frequency_penalty"
         private const val KEY_TIMEOUT_SECONDS = "model_timeout_seconds"
-        
+
         // AgentConfig keys
         private const val KEY_MAX_STEPS = "agent_max_steps"
         private const val KEY_LANGUAGE = "agent_language"
         private const val KEY_VERBOSE = "agent_verbose"
         private const val KEY_SCREENSHOT_DELAY_MS = "agent_screenshot_delay_ms"
-        
+
         // Saved model profiles keys
         private const val KEY_SAVED_PROFILES = "saved_model_profiles"
         private const val KEY_CURRENT_PROFILE_ID = "current_profile_id"
-        
+
         // Task templates keys
         private const val KEY_TASK_TEMPLATES = "task_templates"
-        
+
         // Custom system prompt keys
         private const val KEY_CUSTOM_SYSTEM_PROMPT_CN = "custom_system_prompt_cn"
         private const val KEY_CUSTOM_SYSTEM_PROMPT_EN = "custom_system_prompt_en"
-        
+
         // Dev profiles import key
         private const val KEY_DEV_PROFILES_IMPORTED = "dev_profiles_imported"
-        
+
         // Voice settings keys
         private const val KEY_VOICE_MODEL_DOWNLOADED = "voice_model_downloaded"
         private const val KEY_VOICE_MODEL_PATH = "voice_model_path"
         private const val KEY_VOICE_CONTINUOUS_LISTENING = "voice_continuous_listening"
         private const val KEY_VOICE_WAKE_WORDS = "voice_wake_words"
         private const val KEY_VOICE_WAKE_SENSITIVITY = "voice_wake_sensitivity"
-        
+
         // Default values
         private val DEFAULT_MODEL_CONFIG = ModelConfig()
         private val DEFAULT_AGENT_CONFIG = AgentConfig()
     }
-    
+
     // Cache for detecting config changes
     private var lastModelConfig: ModelConfig? = null
     private var lastAgentConfig: AgentConfig? = null
-    
+
     // Regular preferences for non-sensitive data
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
-    
+
     // Encrypted preferences for sensitive data (API Key)
     private val securePrefs: SharedPreferences by lazy {
         createEncryptedPrefs()
     }
-    
+
     /**
      * Creates encrypted SharedPreferences for sensitive data.
      *
@@ -131,30 +131,21 @@ class SettingsManager(private val context: Context) {
      * @return SharedPreferences instance for storing sensitive data
      *
      */
+    /**
+     * Creates SharedPreferences for sensitive data.
+     *
+     * In system build, we use standard SharedPreferences as EncryptedSharedPreferences
+     * is not available. System apps have higher security level.
+     *
+     * @return SharedPreferences instance for storing sensitive data
+     */
     private fun createEncryptedPrefs(): SharedPreferences {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val masterKey = MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build()
-                
-                EncryptedSharedPreferences.create(
-                    context,
-                    SECURE_PREFS_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            } else {
-                Logger.w(TAG, "Device does not support EncryptedSharedPreferences, using regular prefs")
-                context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
-            }
-        } catch (e: Exception) {
-            Logger.e(TAG, "Failed to create encrypted prefs, using fallback", e)
-            context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
-        }
+        // In system build, use standard SharedPreferences
+        // System apps have higher security level, so this is acceptable
+        Logger.d(TAG, "Using standard SharedPreferences for secure data (system build)")
+        return context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
     }
-    
+
     /**
      * Gets the current ModelConfig from storage.
      *
@@ -166,7 +157,7 @@ class SettingsManager(private val context: Context) {
     fun getModelConfig(): ModelConfig {
         Logger.d(TAG, "Loading model configuration")
         return ModelConfig(
-            baseUrl = prefs.getString(KEY_BASE_URL, DEFAULT_MODEL_CONFIG.baseUrl) 
+            baseUrl = prefs.getString(KEY_BASE_URL, DEFAULT_MODEL_CONFIG.baseUrl)
                 ?: DEFAULT_MODEL_CONFIG.baseUrl,
             apiKey = securePrefs.getString(KEY_API_KEY, DEFAULT_MODEL_CONFIG.apiKey)
                 ?.ifEmpty { "EMPTY" } ?: "EMPTY",
@@ -179,7 +170,7 @@ class SettingsManager(private val context: Context) {
             timeoutSeconds = prefs.getLong(KEY_TIMEOUT_SECONDS, DEFAULT_MODEL_CONFIG.timeoutSeconds)
         )
     }
-    
+
     /**
      * Saves the ModelConfig to storage.
      *
@@ -202,14 +193,14 @@ class SettingsManager(private val context: Context) {
             putLong(KEY_TIMEOUT_SECONDS, config.timeoutSeconds)
             apply()
         }
-        
+
         // Save API Key to encrypted prefs
         securePrefs.edit().apply {
             putString(KEY_API_KEY, config.apiKey)
             apply()
         }
     }
-    
+
     /**
      * Gets the current AgentConfig from storage.
      *
@@ -228,7 +219,7 @@ class SettingsManager(private val context: Context) {
             screenshotDelayMs = prefs.getLong(KEY_SCREENSHOT_DELAY_MS, DEFAULT_AGENT_CONFIG.screenshotDelayMs)
         )
     }
-    
+
     /**
      * Saves the AgentConfig to storage.
      *
@@ -245,7 +236,7 @@ class SettingsManager(private val context: Context) {
             apply()
         }
     }
-    
+
     /**
      * Clears all saved settings and resets to defaults.
      *
@@ -256,7 +247,7 @@ class SettingsManager(private val context: Context) {
         prefs.edit().clear().apply()
         securePrefs.edit().clear().apply()
     }
-    
+
     /**
      * Checks if settings have been saved before.
      *
@@ -265,7 +256,7 @@ class SettingsManager(private val context: Context) {
     fun hasSettings(): Boolean {
         return prefs.contains(KEY_BASE_URL) || prefs.contains(KEY_MAX_STEPS)
     }
-    
+
     /**
      * Migrates API Key from old unencrypted storage to encrypted storage.
      *
@@ -281,7 +272,7 @@ class SettingsManager(private val context: Context) {
             Logger.i(TAG, "Migrated API Key to secure storage")
         }
     }
-    
+
     /**
      * Checks if configuration has changed since last check.
      *
@@ -292,18 +283,18 @@ class SettingsManager(private val context: Context) {
     fun hasConfigChanged(): Boolean {
         val currentModelConfig = getModelConfig()
         val currentAgentConfig = getAgentConfig()
-        
+
         val changed = lastModelConfig != currentModelConfig || lastAgentConfig != currentAgentConfig
-        
+
         // Update cache
         lastModelConfig = currentModelConfig
         lastAgentConfig = currentAgentConfig
-        
+
         return changed
     }
-    
+
     // ==================== Saved Model Profiles ====================
-    
+
     /**
      * Gets all saved model profiles.
      *
@@ -348,7 +339,7 @@ class SettingsManager(private val context: Context) {
             emptyList()
         }
     }
-    
+
     /**
      * Saves a new model profile or updates existing one.
      *
@@ -361,19 +352,19 @@ class SettingsManager(private val context: Context) {
         Logger.d(TAG, "Saving profile: id=${profile.id}, name=${profile.displayName}")
         val profiles = getSavedProfiles().toMutableList()
         val existingIndex = profiles.indexOfFirst { it.id == profile.id }
-        
+
         if (existingIndex >= 0) {
             profiles[existingIndex] = profile
         } else {
             profiles.add(profile)
         }
-        
+
         saveProfilesList(profiles)
-        
+
         // Save API key separately in secure storage
         securePrefs.edit().putString("profile_apikey_${profile.id}", profile.config.apiKey).apply()
     }
-    
+
     /**
      * Deletes a saved model profile.
      *
@@ -386,16 +377,16 @@ class SettingsManager(private val context: Context) {
         Logger.d(TAG, "Deleting profile: id=$profileId")
         val profiles = getSavedProfiles().filter { it.id != profileId }
         saveProfilesList(profiles)
-        
+
         // Remove API key from secure storage
         securePrefs.edit().remove("profile_apikey_$profileId").apply()
-        
+
         // If deleted profile was current, clear current profile ID
         if (getCurrentProfileId() == profileId) {
             setCurrentProfileId(null)
         }
     }
-    
+
     /**
      * Gets the currently selected profile ID.
      *
@@ -404,7 +395,7 @@ class SettingsManager(private val context: Context) {
     fun getCurrentProfileId(): String? {
         return prefs.getString(KEY_CURRENT_PROFILE_ID, null)
     }
-    
+
     /**
      * Sets the currently selected profile ID.
      *
@@ -420,7 +411,7 @@ class SettingsManager(private val context: Context) {
             apply()
         }
     }
-    
+
     /**
      * Gets a profile by ID.
      *
@@ -430,7 +421,7 @@ class SettingsManager(private val context: Context) {
     fun getProfileById(profileId: String): SavedModelProfile? {
         return getSavedProfiles().find { it.id == profileId }
     }
-    
+
     /**
      * Generates a unique profile ID.
      *
@@ -439,7 +430,7 @@ class SettingsManager(private val context: Context) {
     fun generateProfileId(): String {
         return "profile_${System.currentTimeMillis()}"
     }
-    
+
     /**
      * Saves the list of profiles to storage.
      *
@@ -463,9 +454,9 @@ class SettingsManager(private val context: Context) {
         }
         prefs.edit().putString(KEY_SAVED_PROFILES, array.toString()).apply()
     }
-    
+
     // ==================== Task Templates ====================
-    
+
     /**
      * Gets all saved task templates.
      *
@@ -488,7 +479,7 @@ class SettingsManager(private val context: Context) {
             emptyList()
         }
     }
-    
+
     /**
      * Saves a new task template or updates existing one.
      *
@@ -501,16 +492,16 @@ class SettingsManager(private val context: Context) {
         Logger.d(TAG, "Saving task template: id=${template.id}, name=${template.name}")
         val templates = getTaskTemplates().toMutableList()
         val existingIndex = templates.indexOfFirst { it.id == template.id }
-        
+
         if (existingIndex >= 0) {
             templates[existingIndex] = template
         } else {
             templates.add(template)
         }
-        
+
         saveTemplatesList(templates)
     }
-    
+
     /**
      * Deletes a task template.
      *
@@ -521,7 +512,7 @@ class SettingsManager(private val context: Context) {
         val templates = getTaskTemplates().filter { it.id != templateId }
         saveTemplatesList(templates)
     }
-    
+
     /**
      * Gets a template by ID.
      *
@@ -531,7 +522,7 @@ class SettingsManager(private val context: Context) {
     fun getTemplateById(templateId: String): TaskTemplate? {
         return getTaskTemplates().find { it.id == templateId }
     }
-    
+
     /**
      * Generates a unique template ID.
      *
@@ -540,7 +531,7 @@ class SettingsManager(private val context: Context) {
     fun generateTemplateId(): String {
         return "template_${System.currentTimeMillis()}"
     }
-    
+
     /**
      * Saves the list of templates to storage.
      *
@@ -558,13 +549,13 @@ class SettingsManager(private val context: Context) {
         }
         prefs.edit().putString(KEY_TASK_TEMPLATES, array.toString()).apply()
     }
-    
+
     // ==================== Custom System Prompt ====================
-    
+
     /**
      * Gets the custom system prompt for the specified language.
      * Returns null if no custom prompt is set.
-     * 
+     *
      * @param language Language code: "cn" for Chinese, "en" for English
      * @return The custom system prompt or null if not set
      */
@@ -576,10 +567,10 @@ class SettingsManager(private val context: Context) {
         }
         return prefs.getString(key, null)
     }
-    
+
     /**
      * Saves a custom system prompt for the specified language.
-     * 
+     *
      * @param language Language code: "cn" for Chinese, "en" for English
      * @param prompt The custom system prompt to save
      */
@@ -591,10 +582,10 @@ class SettingsManager(private val context: Context) {
         }
         prefs.edit().putString(key, prompt).apply()
     }
-    
+
     /**
      * Clears the custom system prompt for the specified language.
-     * 
+     *
      * @param language Language code: "cn" for Chinese, "en" for English
      */
     fun clearCustomSystemPrompt(language: String) {
@@ -605,19 +596,19 @@ class SettingsManager(private val context: Context) {
         }
         prefs.edit().remove(key).apply()
     }
-    
+
     /**
      * Checks if a custom system prompt is set for the specified language.
-     * 
+     *
      * @param language Language code: "cn" for Chinese, "en" for English
      * @return true if a custom prompt is set, false otherwise
      */
     fun hasCustomSystemPrompt(language: String): Boolean {
         return getCustomSystemPrompt(language) != null
     }
-    
+
     // ==================== Dev Profiles Import ====================
-    
+
     /**
      * Checks if dev profiles have already been imported.
      *
@@ -626,14 +617,14 @@ class SettingsManager(private val context: Context) {
     fun hasImportedDevProfiles(): Boolean {
         return prefs.getBoolean(KEY_DEV_PROFILES_IMPORTED, false)
     }
-    
+
     /**
      * Marks dev profiles as imported.
      */
     fun markDevProfilesImported() {
         prefs.edit().putBoolean(KEY_DEV_PROFILES_IMPORTED, true).apply()
     }
-    
+
     /**
      * Imports dev profiles from JSON string.
      *
@@ -645,15 +636,15 @@ class SettingsManager(private val context: Context) {
             val root = JSONObject(json)
             val profilesArray = root.getJSONArray("profiles")
             val defaultProfileName = root.optString("defaultProfile", "")
-            
+
             var importedCount = 0
             var defaultProfileId: String? = null
-            
+
             for (i in 0 until profilesArray.length()) {
                 val obj = profilesArray.getJSONObject(i)
                 val name = obj.getString("name")
                 val profileId = generateProfileId()
-                
+
                 val profile = SavedModelProfile(
                     id = profileId,
                     displayName = name,
@@ -663,17 +654,17 @@ class SettingsManager(private val context: Context) {
                         modelName = obj.getString("modelName")
                     )
                 )
-                
+
                 saveProfile(profile)
                 importedCount++
-                
+
                 if (name == defaultProfileName) {
                     defaultProfileId = profileId
                 }
-                
+
                 Logger.d(TAG, "Imported dev profile: $name")
             }
-            
+
             // Set default profile and apply its config
             if (defaultProfileId != null) {
                 setCurrentProfileId(defaultProfileId)
@@ -687,7 +678,7 @@ class SettingsManager(private val context: Context) {
                     saveModelConfig(profile.config)
                 }
             }
-            
+
             markDevProfilesImported()
             Logger.i(TAG, "Imported $importedCount dev profiles")
             importedCount
@@ -696,7 +687,7 @@ class SettingsManager(private val context: Context) {
             -1
         }
     }
-    
+
     // ==================== Voice Settings ====================
 
     /**

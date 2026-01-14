@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/floating_window_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    app:cardBackgroundColor="@color/floating_window_background"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="8dp"
-    app:strokeColor="@color/floating_window_border"
-    app:strokeWidth="1dp">
+    android:background="@color/floating_window_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -60,7 +56,7 @@
                 android:id="@+id/btn_open_app"
                 android:layout_width="28dp"
                 android:layout_height="28dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/floating_open_app"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_open_app"
@@ -72,7 +68,7 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:layout_marginStart="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/floating_minimize"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_minus"
@@ -84,7 +80,7 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:layout_marginStart="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/dialog_cancel"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_close"
@@ -119,11 +115,11 @@
                     android:id="@+id/btn_select_template"
                     android:layout_width="28dp"
                     android:layout_height="28dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/task_select_template"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_list"
-                    app:tint="@color/icon_secondary" />
+                    android:tint="@color/icon_secondary" />
 
             </LinearLayout>
 
@@ -141,18 +137,17 @@
                 android:textColorHint="@color/text_hint"
                 android:textSize="13sp" />
 
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btn_start"
+                style="@style/Widget.App.Button.Primary"
                 android:layout_width="match_parent"
                 android:layout_height="40dp"
                 android:layout_marginTop="10dp"
                 android:text="@string/start_task"
                 android:textSize="13sp"
-                app:backgroundTint="@color/primary"
-                app:cornerRadius="8dp"
-                app:icon="@drawable/ic_play"
-                app:iconGravity="textStart"
-                app:iconSize="18dp" />
+                android:drawableStart="@drawable/ic_play"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical|start" />
 
         </LinearLayout>
 
@@ -198,37 +193,35 @@
                 android:layout_marginEnd="4dp">
 
                 <!-- Pause button (shown when running) -->
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/btn_pause"
                     android:layout_width="match_parent"
                     android:layout_height="36dp"
                     android:text="@string/pause_task"
                     android:textSize="12sp"
                     android:visibility="visible"
-                    app:backgroundTint="@color/status_waiting"
-                    app:cornerRadius="8dp"
-                    app:icon="@drawable/ic_pause"
-                    app:iconGravity="textStart"
-                    app:iconSize="16dp" />
+                    android:backgroundTint="@color/status_waiting"
+                    android:drawableStart="@drawable/ic_pause"
+                    android:drawablePadding="8dp"
+                    android:gravity="center_vertical|start" />
 
                 <!-- Resume button (shown when paused) -->
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/btn_resume"
                     android:layout_width="match_parent"
                     android:layout_height="36dp"
                     android:text="@string/resume_task"
                     android:textSize="12sp"
                     android:visibility="gone"
-                    app:backgroundTint="@color/status_running"
-                    app:cornerRadius="8dp"
-                    app:icon="@drawable/ic_play"
-                    app:iconGravity="textStart"
-                    app:iconSize="16dp" />
+                    android:backgroundTint="@color/status_running"
+                    android:drawableStart="@drawable/ic_play"
+                    android:drawablePadding="8dp"
+                    android:gravity="center_vertical|start" />
 
             </FrameLayout>
 
             <!-- Stop button - always in same position -->
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btn_stop"
                 android:layout_width="0dp"
                 android:layout_height="36dp"
@@ -237,29 +230,27 @@
                 android:text="@string/cancel_task"
                 android:textSize="12sp"
                 android:visibility="visible"
-                app:backgroundTint="@color/status_error"
-                app:cornerRadius="8dp"
-                app:icon="@drawable/ic_stop"
-                app:iconGravity="textStart"
-                app:iconSize="16dp" />
+                android:backgroundTint="@color/status_error"
+                android:drawableStart="@drawable/ic_stop"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical|start" />
 
         </LinearLayout>
 
         <!-- New Task button (shown when completed/failed) -->
-        <com.google.android.material.button.MaterialButton
+        <Button
             android:id="@+id/btn_new_task"
+            style="@style/Widget.App.Button.Primary"
             android:layout_width="match_parent"
             android:layout_height="36dp"
             android:layout_margin="8dp"
             android:text="@string/floating_new_task"
             android:textSize="12sp"
             android:visibility="gone"
-            app:backgroundTint="@color/primary"
-            app:cornerRadius="8dp"
-            app:icon="@drawable/ic_plus"
-            app:iconGravity="textStart"
-            app:iconSize="16dp" />
+            android:drawableStart="@drawable/ic_plus"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical|start" />
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</FrameLayout>
