@@ -768,6 +768,7 @@ class FloatingWindowService : Service(), FloatingWindowController {
             x = 0
             y = 0
             // Allow keyboard input
+            @Suppress("DEPRECATION")
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
     }

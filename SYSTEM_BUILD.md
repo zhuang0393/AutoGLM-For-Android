@@ -25,10 +25,9 @@
    - 系统模式下自动初始化 SystemService
    - 隐藏 Shizuku 状态 UI
 
-4. **更新构建配置**
-   - 移除 Shizuku 依赖
-   - 创建 Android.bp 用于系统编译
-   - 更新 AndroidManifest.xml 添加系统权限
+    - 移除 Shizuku 依赖
+    - 创建 Android.bp 用于系统编译，并静态链接所需的 AndroidX 库
+    - 更新 AndroidManifest.xml 添加系统权限
 
 ## 编译方法
 
@@ -63,8 +62,8 @@ m AutoGLM
 项目已包含 `Android.bp` 文件，配置了：
 - Platform 签名（`certificate: "platform"`）
 - 系统应用权限（`privileged: true`）
-- 平台 API（`platform_apis: true`）
-- 所需的依赖库
+- System API（`sdk_version: "system_current"`）
+- 静态链接所需的 AndroidX 库
 
 ## 系统权限说明
 
@@ -109,13 +108,23 @@ m AutoGLM
 1. 应用是否使用 platform 签名
 2. AndroidManifest.xml 中是否包含系统权限
 3. 应用是否在 `/system/priv-app/` 目录下
+4. 检查 `permissions_com.kevinluo.autoglm.xml` 是否正确安装到 `/product/etc/permissions/` 或 `/system/etc/permissions/`
+
 
 ### 编译错误
 
-如果 Android.bp 编译失败：
+如果 Android.bp 编译失败或运行时出现 ClassNotFoundException：
 1. 检查依赖库是否在系统源码中可用
 2. 可能需要调整 `static_libs` 和 `libs` 列表
 3. 检查 Kotlin 和 Java 版本兼容性
+4. **重要**：如果修改了 `static_libs` 后仍然报错，请尝试执行 `m installclean` 清清理旧的构建产物。
+
+### 运行时权限错误
+如果启动时遇到 `java.lang.IllegalStateException: Signature|privileged permissions not in privileged permission allowlist`：
+1. 这说明 `permissions_com.kevinluo.autoglm.xml` 文件未正确更新到系统镜像中。
+2. 请务必执行 **`m installclean`** 或手动删除输出目录 (`out/target/product/.../product/etc/permissions/permissions_com.kevinluo.autoglm.xml`)。
+3. 重新编译 `m AutoGLM` 并刷入设备。
+4. 确保 `Android.bp` 中的 Permission XML module (`prebuilt_etc`) 包含 `product_specific: true`，且位置正确。
 
 ## 回退到 Shizuku 模式
 

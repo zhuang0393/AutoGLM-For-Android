@@ -179,13 +179,12 @@ class MainActivity : Activity(), PhoneAgentListener {
             Logger.i(TAG, "Running in system build mode, initializing SystemService")
             componentManager.initializeSystemService()
             // Hide Shizuku status UI in system mode
-            // shizukuStatusCard may not exist in layout, safely ignore
-            // Note: Resource may not exist, commented out to avoid compilation error
-            // try {
-            //     findViewById<View>(R.id.shizukuStatusCard)?.visibility = View.GONE
-            // } catch (e: Exception) {
-            //     // Ignore if view doesn't exist
-            // }
+            try {
+                findViewById<View>(R.id.shizukuStatusCard)?.visibility = View.GONE
+            } catch (e: Exception) {
+                // Ignore if view doesn't exist
+                Logger.e(TAG, "Failed to hide Shizuku card", e)
+            }
         } else {
             // Only setup Shizuku listeners in non-system mode
             setupShizukuListeners()

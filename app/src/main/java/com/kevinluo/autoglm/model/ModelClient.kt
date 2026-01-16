@@ -327,7 +327,12 @@ data class Delta(
 ) {
     companion object {
         fun fromJson(json: JSONObject): Delta {
-            return Delta(content = json.optString("content", null))
+            val content = if (json.has("content") && !json.isNull("content")) {
+                json.getString("content")
+            } else {
+                null
+            }
+            return Delta(content = content)
         }
     }
 }

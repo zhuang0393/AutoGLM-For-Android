@@ -602,6 +602,7 @@ class HistoryDetailActivity : Activity() {
             }
 
             // Notify gallery
+            @Suppress("DEPRECATION")
             val intent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
             intent.data = android.net.Uri.fromFile(file)
             sendBroadcast(intent)

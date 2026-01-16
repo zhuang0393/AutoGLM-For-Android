@@ -30,7 +30,19 @@ English | [中文](README.md)
 
 ---
 
-## 📖 Introduction
+## � About This Fork
+
+This project is forked from [AutoGLM For Android](https://github.com/Luokavin/AutoGLM-For-Android). Special thanks to the original author [Luokavin](https://github.com/Luokavin) for their outstanding work.
+
+**Key Changes:**
+
+1.  **Removed Shizuku Dependency**: This version does not rely on Shizuku for permissions but runs directly within the Android system context.
+2.  **System Source Build**: Refactored to build within the Android system source tree (Android.bp) and integrated as a system application (priv-app).
+3.  **System-Level Permissions**: Utilizes platform signature and `Instrumentation` API to directly execute simulated touches, screenshots, etc., offering more stability and smoother experience.
+
+---
+
+## �📖 Introduction
 
 AutoGLM For Android is a native Android application developed based on the [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) open-source project. It transforms the original phone automation solution that required a computer + ADB connection into a standalone app running directly on the phone, allowing users to control their phone using natural language to complete various tasks.
 
@@ -38,7 +50,7 @@ AutoGLM For Android is a native Android application developed based on the [Open
 
 - 🚀 **No Computer Required**: Runs directly on the phone without ADB connection
 - 🎯 **Natural Language Control**: Describe tasks in natural language, AI executes automatically
-- 🔒 **Shizuku Permissions**: Obtains necessary system permissions through Shizuku
+- 🔒 **System Permissions**: Runs as system app, directly obtains necessary permissions
 - 🪟 **Floating Window Interaction**: Floating window displays task execution progress in real-time
 - 📱 **Native Experience**: Material Design, smooth native Android experience
 - 🔌 **Multi-Model Support**: Compatible with any model API supporting OpenAI format and image understanding
@@ -49,10 +61,10 @@ AutoGLM For Android is a native Android application developed based on the [Open
 | -------------- | ----------------------- | ---------------------------------- |
 | Runtime        | Computer (Python)       | Phone (Android App)                |
 | Connection     | Requires ADB/USB        | No connection needed, standalone   |
-| Permissions    | ADB shell commands      | Shizuku service                    |
+| Permissions    | ADB shell commands      | System Privileges                  |
 | Text Input     | ADB Keyboard            | Built-in AutoGLM Keyboard          |
 | User Interface | Command line            | Native Android UI + Floating Window|
-| Screenshot     | ADB screencap           | Shizuku shell commands             |
+| Screenshot     | ADB screencap           | System API                         |
 
 ## 📋 Features
 
@@ -82,83 +94,38 @@ AutoGLM For Android is a native Android application developed based on the [Open
 ## 📱 Requirements
 
 - **Android Version**: Android 7.0 (API 24) or higher
-- **Required App**: [Shizuku](https://shizuku.rikka.app/) (for system permissions)
 - **Network**: Connection to model API service (supports any OpenAI-compatible vision model)
 - **Permissions**:
   - Overlay permission (for floating window)
   - Network permission (for API communication)
-  - Shizuku permission (for system operations)
 
 ## 🚀 Quick Start
 
-### Step 1: Install and Activate Shizuku
+### Step 1: Install AutoGLM For Android
 
-Shizuku is the core dependency of this app, used to perform screen clicks, swipes, and other operations.
+Assuming you have built the `AutoGLM` system app and integrated it into the ROM, or have a platform-signed APK.
 
-**Download and Install**
+1. Install the APK and open the app
 
-- [Google Play Download](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api)
-- [GitHub Download](https://github.com/RikkaApps/Shizuku/releases)
-
-**Activation Methods (Choose One)**
-
-| Method           | Use Case                  | Persistence              |
-| ---------------- | ------------------------- | ------------------------ |
-| Wireless Debug   | Recommended, no PC needed | Re-pair after reboot     |
-| ADB Connection   | When PC is available      | Re-execute after reboot  |
-| Root Permission  | Rooted devices            | Permanent                |
-
-**Wireless Debugging Activation Steps (Recommended)**
-
-1. Connect to any WiFi network
-2. Go to phone "Settings" → "Developer Options"
-3. Enable "Wireless Debugging"
-4. Tap "Pair device with pairing code"
-5. Wait for Shizuku notification to appear, enter the pairing code in the notification
-6. Open Shizuku and tap "Start", wait for it to complete
-7. When Shizuku shows "Running", activation is successful
-
-<table>
-  <tr>
-    <td><img src="screenshots/screenshot_7.jpg" width="100%"/></td>
-    <td><img src="screenshots/screenshot_8.jpg" width="100%"/></td>
-    <td><img src="screenshots/screenshot_9.jpg" width="100%"/></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/screenshot_10.jpg" width="100%"/></td>
-    <td><img src="screenshots/screenshot_11.jpg" width="100%"/></td>
-    <td><img src="screenshots/screenshot_12.jpg" width="100%"/></td>
-  </tr>
-</table>
-
-> 💡 **Tip**: If you can't find Developer Options, go to "About Phone" and tap "Build Number" multiple times to enable it.
-
-### Step 2: Install AutoGLM For Android
-
-1. Download the latest APK from [Releases Page](https://github.com/Luokavin/AutoGLM-For-Android/releases)
-2. Install the APK and open the app
-
-### Step 3: Grant Required Permissions
+### Step 2: Grant Required Permissions
 
 After opening the app, grant the following permissions in order:
 
 | Permission          | Purpose                    | Action                                           |
 | ------------------- | -------------------------- | ------------------------------------------------ |
-| Shizuku Permission  | Execute screen operations  | Tap "Authorize" → Always Allow                   |
 | Overlay Permission  | Display task execution window | Tap "Authorize" → Enable toggle               |
 | Keyboard Permission | Input text content         | Tap "Enable Keyboard" → Enable AutoGLM Keyboard  |
 
 <table>
   <tr>
     <td><img src="screenshots/screenshot_13.jpg" width="100%"/></td>
-    <td><img src="screenshots/screenshot_14.jpg" width="100%"/></td>
     <td><img src="screenshots/screenshot_15.jpg" width="100%"/></td>
   </tr>
 </table>
 
 > 💡 **Tip**: If overlay permission cannot be granted, go to app details page, tap "Menu (top right)" → Allow restricted settings, then try granting overlay permission again.
 
-### Step 4: Configure Model Service
+### Step 3: Configure Model Service
 
 Go to "Settings" page and configure the AI model API:
 
@@ -196,7 +163,7 @@ Any model service can be used as long as it meets the following requirements:
 
 > ⚠️ **Note**: Non-AutoGLM models may require custom system prompts to output the correct action command format. You can customize system prompts in Settings → Advanced Settings.
 
-### Step 5: Start Using
+### Step 4: Start Using
 
 1. Enter a task description on the main screen, e.g., "Open WeChat and send a message to File Transfer: test"
 2. Tap "Start Task" button
@@ -316,7 +283,8 @@ Export logs for troubleshooting when issues occur:
 2. **Break Down Complex Tasks**: Split complex tasks into multiple simple ones
 3. **Use Pause Wisely**: Pause before critical steps, confirm before continuing
 4. **Save Common Templates**: Save repetitive tasks as templates for efficiency
-5. **Check Shizuku Regularly**: Ensure Shizuku service keeps running
+
+
 
 ## 🛠️ Development Guide
 
@@ -418,15 +386,13 @@ app/src/main/java/com/kevinluo/autoglm/
 
 **DeviceExecutor (device/DeviceExecutor.kt)**
 
-- Executes shell commands via Shizuku
+- Executes operations via Instrumentation/Shell
 - Implements click, swipe, key press and other operations
 - Supports humanized swipe trajectories
 
 **ScreenshotService (screenshot/ScreenshotService.kt)**
 
-- Captures screen and compresses to WebP
-- Automatically hides floating window to avoid interference
-- Supports sensitive page detection
+- Captures screen and compresses to WebP (Uses System API)
 
 ### Build and Debug
 
@@ -456,38 +422,13 @@ app/src/main/java/com/kevinluo/autoglm/
 
 ## 🔧 FAQ
 
-### Shizuku Related
-
-**Q: Shizuku shows not running?**
-
-A: Make sure Shizuku is installed and opened, follow the guide to activate. Wireless debugging is recommended.
-
-**Q: Shizuku invalid after every restart?**
-
-A: Wireless debugging requires re-pairing. Consider:
-
-- Root method for permanent activation
-- ADB method for activation
-
-### Permission Related
-
-**Q: Cannot grant overlay permission?**
-
-A: Manual operation: System Settings → Apps → AutoGLM → Permissions → Enable "Display over other apps"
-
-**Q: Cannot enable keyboard?**
-
-A: Manual operation: System Settings → Language & Input → Manage Keyboards → Enable AutoGLM Keyboard
-
-### Operation Related
-
 **Q: Click action not working?**
 
 A:
 
-1. Check if Shizuku is running
-2. Some systems require "USB debugging (Security settings)" enabled
-3. Try restarting Shizuku
+1. Check if the app has full system permissions
+2. Ensure `permissions_xml` is properly installed
+3. Check AutoGLM service status
 
 **Q: Text input failed?**
 
@@ -529,7 +470,6 @@ This project is licensed under [MIT License](LICENSE).
 ## 🙏 Acknowledgments
 
 - [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) - Original open-source project
-- [Shizuku](https://github.com/RikkaApps/Shizuku) - System permission framework
 - [Zhipu AI](https://www.zhipuai.cn/) - AutoGLM model provider
 
 ## 📞 Contact

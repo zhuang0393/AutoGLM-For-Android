@@ -234,7 +234,11 @@ class HistoryActivity : Activity() {
         if (isSelectionMode) {
             exitSelectionMode()
         } else {
-            super.onBackPressed()
+            // Using super.onBackPressed() is fine for Activity, but it is deprecated
+            // in ComponentActivity. Since we extend Activity, we can just use finish()
+            // or suppress the warning if we want standard behavior.
+            // For system build simple Activity, finish() mimics back press behavior for simple usages
+            finish()
         }
     }
 

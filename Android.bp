@@ -28,7 +28,14 @@ android_app {
     // Java libraries - only include libraries available in system source
     // Note: AndroidX libraries are static libs in system source and cannot be used directly
     // We'll use standard Android SDK APIs instead
-    libs: [
+    static_libs: [
+        "androidx.core_core",
+        "androidx.appcompat_appcompat",
+        "com.google.android.material_material",
+        "androidx.recyclerview_recyclerview",
+        "androidx-constraintlayout_constraintlayout",
+        "androidx.activity_activity",
+        "androidx.cardview_cardview",
         "kotlin-stdlib",
         // Coroutines are required by app code. Keep them, but disable R8/proguard below to
         // avoid classpath conflicts seen during minification.
@@ -49,5 +56,15 @@ android_app {
     target_sdk_version: "34",
 
     // Product-specific properties
+    product_specific: true,
+
+    required: ["privapp_allowlist_com.kevinluo.autoglm.xml"],
+}
+
+prebuilt_etc {
+    name: "privapp_allowlist_com.kevinluo.autoglm.xml",
+    sub_dir: "permissions",
+    src: "permissions_com.kevinluo.autoglm.xml",
+    filename_from_src: true,
     product_specific: true,
 }

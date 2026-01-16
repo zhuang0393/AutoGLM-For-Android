@@ -61,13 +61,18 @@ class SystemService(private val context: Context) : IUserService.Stub() {
     override fun executeCommand(command: String): String {
         return try {
             when {
+                // New internal command for API-based screenshot
+                command == "INTERNAL_API_SCREENCAP" -> executeDirectScreencap()
                 command.startsWith("input tap ") -> executeTap(command)
                 command.startsWith("input swipe ") -> executeSwipe(command)
                 command.startsWith("input keyevent ") -> executeKeyEvent(command)
                 command.startsWith("screencap ") -> executeScreencap(command)
                 command.startsWith("am start ") -> executeAmStart(command)
                 command.startsWith("dumpsys window") -> executeDumpsysWindow()
+                command.startsWith("ime list -s") -> executeImeList()
+                command.startsWith("ime enable ") -> executeImeEnable(command)
                 command.startsWith("ime set ") -> executeImeSet(command)
+                command.startsWith("settings get secure default_input_method") -> executeGetDefaultIme()
                 command.startsWith("am broadcast ") -> executeAmBroadcast(command)
                 command.startsWith("pm resolve-activity") -> executePmResolveActivity(command)
                 else -> executeShellCommand(command)
@@ -209,6 +214,42 @@ class SystemService(private val context: Context) : IUserService.Stub() {
     }
 
     /**
+     * Executes screencap directly using Instrumentation API.
+     * Returns Base64 encoded image string.
+     */
+    private fun executeDirectScreencap(): String {
+        return try {
+            val bitmap = instrumentation.uiAutomation.takeScreenshot()
+            if (bitmap != null) {
+                // Compress to WebP and encode to Base64 in memory
+                val outputStream = java.io.ByteArrayOutputStream()
+                val format = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    android.graphics.Bitmap.CompressFormat.WEBP_LOSSY
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.graphics.Bitmap.CompressFormat.WEBP
+                }
+                // Use 65 quality as defined in ScreenshotService
+                bitmap.compress(format, 65, outputStream)
+                bitmap.recycle()
+                
+                val base64Data = android.util.Base64.encodeToString(
+                    outputStream.toByteArray(), 
+                    android.util.Base64.NO_WRAP
+                )
+                
+                // Return just the base64 string, ScreenshotService will handle it
+                base64Data
+            } else {
+                "Error: Failed to take screenshot (bitmap is null)\n[exit code: 1]"
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error capturing screenshot via API", e)
+            "Error: ${e.message}\n[exit code: 1]"
+        }
+    }
+
+    /**
      * Executes screencap command using System API.
      *
      * For system builds, we can use shell command with system permissions.
@@ -276,12 +317,78 @@ class SystemService(private val context: Context) : IUserService.Stub() {
     }
 
     /**
-     * Executes ime set command.
+     * Executes ime list -s command using InputMethodManager.
+     */
+    private fun executeImeList(): String {
+        return try {
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            val enabledMethods = imm.enabledInputMethodList
+            val ids = enabledMethods.joinToString("\n") { it.id }
+            "$ids\n[exit code: 0]"
+        } catch (e: Exception) {
+            "Error: ${e.message}\n[exit code: 1]"
+        }
+    }
+
+    /**
+     * Executes ime enable command using Settings.Secure.
+     */
+    private fun executeImeEnable(command: String): String {
+        return try {
+            val id = command.removePrefix("ime enable ").trim()
+            val resolver = context.contentResolver
+            val enabledImes = android.provider.Settings.Secure.getString(
+                resolver,
+                android.provider.Settings.Secure.ENABLED_INPUT_METHODS
+            ) ?: ""
+            
+            if (enabledImes.contains(id)) {
+                return "Already enabled: $id\n[exit code: 0]"
+            }
+            
+            val newEnabledImes = if (enabledImes.isEmpty()) id else "$enabledImes:$id"
+            val success = android.provider.Settings.Secure.putString(
+                resolver,
+                android.provider.Settings.Secure.ENABLED_INPUT_METHODS,
+                newEnabledImes
+            )
+            
+            if (success) "Input method enabled: $id\n[exit code: 0]" else "Failed to enable input method\n[exit code: 1]"
+        } catch (e: Exception) {
+            "Error: ${e.message}\n[exit code: 1]"
+        }
+    }
+
+    /**
+     * Executes ime set command using Settings.Secure.
      */
     private fun executeImeSet(command: String): String {
-        // IME switching requires system permissions
-        // Fallback to shell command
-        return executeShellCommand(command)
+        return try {
+            val id = command.removePrefix("ime set ").trim()
+            val success = android.provider.Settings.Secure.putString(
+                context.contentResolver,
+                android.provider.Settings.Secure.DEFAULT_INPUT_METHOD,
+                id
+            )
+            if (success) "Input method set to $id\n[exit code: 0]" else "Failed to set input method\n[exit code: 1]"
+        } catch (e: Exception) {
+            "Error: ${e.message}\n[exit code: 1]"
+        }
+    }
+
+    /**
+     * Executes settings get secure default_input_method.
+     */
+    private fun executeGetDefaultIme(): String {
+        return try {
+            val id = android.provider.Settings.Secure.getString(
+                context.contentResolver, 
+                android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
+            ) ?: ""
+            "$id\n[exit code: 0]"
+        } catch (e: Exception) {
+            "Error: ${e.message}\n[exit code: 1]"
+        }
     }
 
     /**

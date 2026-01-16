@@ -271,13 +271,32 @@ class ScreenshotService(
      */
     private suspend fun executeScreencapToBytes(): ByteArray? = coroutineScope {
         val timestamp = System.currentTimeMillis()
-        val pngFile = "/data/local/tmp/screenshot_$timestamp.png"
+        // Use external cache directory or specific accessible path for system app
+        // Since we are running screencap via shell, we need a path that both shell and app can access
+        // /data/local/tmp requires shell permission, but we are running as system app which might be restricted
+        // Let's try /sdcard/Android/data/com.kevinluo.autoglm/cache if it exists, or fallback to /data/local/tmp
+        val pngFile = "/sdcard/Android/data/com.kevinluo.autoglm/cache/screenshot_$timestamp.png"
         val base64File = "$pngFile.b64"
         
         try {
-            Logger.d(TAG, "Attempting screenshot capture")
+            Logger.d(TAG, "Attempting screenshot capture via API first")
             val startTime = System.currentTimeMillis()
+
+            // Try direct API capture first using internal command
+            val apiResult = userService.executeCommand("INTERNAL_API_SCREENCAP")
             
+            if (!apiResult.startsWith("Error")) {
+                // Success! The result is the raw base64 string
+                Logger.d(TAG, "API screenshot capture successful, processing base64 data")
+                val decodeStartTime = System.currentTimeMillis()
+                val bytes = Base64.decode(apiResult, Base64.DEFAULT)
+                Logger.d(TAG, "Base64 decode took ${System.currentTimeMillis() - decodeStartTime}ms")
+                return@coroutineScope bytes
+            }
+            
+            Logger.w(TAG, "API capture failed: $apiResult, falling back to shell command")
+            
+            // Fallback to shell command
             // Capture screenshot and pipe to base64
             val captureResult = userService.executeCommand(
                 "screencap -p | base64 > $base64File && stat -c %s $base64File"
