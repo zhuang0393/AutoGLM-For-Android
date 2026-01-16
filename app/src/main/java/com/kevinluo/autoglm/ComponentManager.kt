@@ -16,8 +16,10 @@ import com.kevinluo.autoglm.screenshot.FloatingWindowController
 import com.kevinluo.autoglm.screenshot.ScreenshotService
 import com.kevinluo.autoglm.settings.SettingsManager
 import com.kevinluo.autoglm.ui.FloatingWindowService
+import com.kevinluo.autoglm.service.AutoGLMAccessibilityService
 import com.kevinluo.autoglm.util.HumanizedSwipeGenerator
 import com.kevinluo.autoglm.util.Logger
+import android.provider.Settings
 
 /**
  * Centralized component manager for dependency injection and lifecycle management.
@@ -83,6 +85,60 @@ class ComponentManager private constructor(private val context: Context) {
     private var _screenshotService: ScreenshotService? = null
     private var _actionHandler: ActionHandler? = null
     private var _phoneAgent: PhoneAgent? = null
+    
+    // Accessibility Service reference
+    private var accessibilityService: AutoGLMAccessibilityService? = null
+    
+    fun onAccessibilityServiceConnected(service: AutoGLMAccessibilityService) {
+        Logger.i(TAG, "AccessibilityService connected")
+        accessibilityService = service
+    }
+    
+    fun onAccessibilityServiceDisconnected() {
+        Logger.i(TAG, "AccessibilityService disconnected")
+        accessibilityService = null
+    }
+
+    /**
+     * Attempts to enable the Accessibility Service automatically using system permissions.
+     */
+    fun enableAccessibilityService() {
+        try {
+            val componentName = "${context.packageName}/.service.AutoGLMAccessibilityService"
+            val enabledServices = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            
+            if (enabledServices.contains(componentName)) {
+                Logger.d(TAG, "Accessibility service already enabled")
+                return
+            }
+            
+            val newServices = if (enabledServices.isBlank()) {
+                componentName
+            } else {
+                "$enabledServices:$componentName"
+            }
+            
+            // This requires WRITE_SECURE_SETTINGS which we have
+            Settings.Secure.putString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                newServices
+            )
+            
+            Settings.Secure.putString(
+                context.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED,
+                "1"
+            )
+            
+            Logger.i(TAG, "Accessibility service enabled via Settings")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to enable accessibility service", e)
+        }
+    }
 
     /**
      * Initializes SystemService for system build.
@@ -92,6 +148,8 @@ class ComponentManager private constructor(private val context: Context) {
         if (systemService == null) {
             Logger.i(TAG, "Initializing SystemService for system build")
             systemService = SystemService(context)
+            // Auto-enable accessibility service
+            enableAccessibilityService()
             onServiceConnected(systemService!!)
         }
     }
@@ -212,7 +270,12 @@ class ComponentManager private constructor(private val context: Context) {
 
         // Create ScreenshotService with floating window controller provider
         // Use a provider function so it can get the current instance dynamically
-        _screenshotService = ScreenshotService(service) { FloatingWindowService.getInstance() }
+        _screenshotService = ScreenshotService(
+            userService = service,
+            cachePath = "/data/local/tmp",
+            floatingWindowControllerProvider = { FloatingWindowService.getInstance() },
+            accessibilityServiceProvider = { accessibilityService }
+        )
 
         // Create ActionHandler with floating window provider to hide window during touch operations
         _actionHandler = ActionHandler(

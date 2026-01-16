@@ -12,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import com.kevinluo.autoglm.service.AutoGLMAccessibilityService
 
 /**
  * Data class representing a captured screenshot.
@@ -80,7 +81,9 @@ interface FloatingWindowController {
  */
 class ScreenshotService(
     private val userService: IUserService,
-    private val floatingWindowControllerProvider: () -> FloatingWindowController? = { null }
+    private val cachePath: String? = null,
+    private val floatingWindowControllerProvider: () -> FloatingWindowController? = { null },
+    private val accessibilityServiceProvider: () -> AutoGLMAccessibilityService? = { null }
 ) {
     
     companion object {
@@ -170,21 +173,37 @@ class ScreenshotService(
      */
     private suspend fun captureScreen(): Screenshot = withContext(Dispatchers.IO) {
         try {
-            Logger.d(TAG, "Executing screencap command")
+            var bitmap: Bitmap? = null
             
-            val pngData = executeScreencapToBytes()
-            
-            if (pngData == null || pngData.isEmpty()) {
-                Logger.w(TAG, "Failed to capture screenshot, returning fallback")
-                return@withContext createFallbackScreenshot()
+            // 1. Try Accessibility Service first (Preferred method)
+            val accessibilityService = accessibilityServiceProvider()
+            if (accessibilityService != null) {
+                Logger.d(TAG, "Attempting capture via AccessibilityService")
+                bitmap = accessibilityService.captureScreenshot()
+                if (bitmap == null) {
+                    Logger.w(TAG, "Accessibility capture returned null, falling back to shell")
+                } else {
+                    Logger.d(TAG, "Accessibility capture successful")
+                }
             }
             
-            Logger.d(TAG, "PNG data captured: ${pngData.size} bytes")
-            
-            // Decode PNG to bitmap
-            var bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.size)
+            // 2. Fallback to Shell command if Accessibility failed or unavailable
             if (bitmap == null) {
-                Logger.w(TAG, "Failed to decode PNG, returning fallback")
+                Logger.d(TAG, "Executing screencap command (shell)")
+                
+                val pngData = executeScreencapToBytes()
+                
+                if (pngData != null && pngData.isNotEmpty()) {
+                    Logger.d(TAG, "PNG data captured: ${pngData.size} bytes")
+                    bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.size)
+                    if (bitmap == null) {
+                        Logger.w(TAG, "Failed to decode PNG")
+                    }
+                }
+            }
+            
+            if (bitmap == null) {
+                Logger.w(TAG, "Failed to capture screenshot (all methods failed), returning fallback")
                 return@withContext createFallbackScreenshot()
             }
             
@@ -208,8 +227,9 @@ class ScreenshotService(
             bitmap.recycle()
             
             val webpData = webpStream.toByteArray()
-            val compressionRatio = if (pngData.isNotEmpty()) 100 * webpData.size / pngData.size else 0
-            Logger.d(TAG, "Converted to WebP: ${webpData.size} bytes ($compressionRatio% of PNG)")
+
+            // val compressionRatio = if (pngData.isNotEmpty()) 100 * webpData.size / pngData.size else 0
+            Logger.d(TAG, "Converted to WebP: ${webpData.size} bytes")
             
             val base64Data = encodeToBase64(webpData)
             Logger.d(TAG, "Screenshot captured: ${scaledWidth}x${scaledHeight}, base64 length: ${base64Data.length}")
@@ -271,120 +291,53 @@ class ScreenshotService(
      */
     private suspend fun executeScreencapToBytes(): ByteArray? = coroutineScope {
         val timestamp = System.currentTimeMillis()
-        // Use external cache directory or specific accessible path for system app
-        // Since we are running screencap via shell, we need a path that both shell and app can access
-        // /data/local/tmp requires shell permission, but we are running as system app which might be restricted
-        // Let's try /sdcard/Android/data/com.kevinluo.autoglm/cache if it exists, or fallback to /data/local/tmp
-        val pngFile = "/sdcard/Android/data/com.kevinluo.autoglm/cache/screenshot_$timestamp.png"
-        val base64File = "$pngFile.b64"
+        // Use provided cache path or fallback to /data/local/tmp
+        val baseDir = cachePath ?: "/data/local/tmp"
+        val pngFile = "$baseDir/screenshot_$timestamp.png"
         
         try {
-            Logger.d(TAG, "Attempting screenshot capture via API first")
+            Logger.d(TAG, "Attempting screenshot capture via shell to: $pngFile")
             val startTime = System.currentTimeMillis()
 
-            // Try direct API capture first using internal command
-            val apiResult = userService.executeCommand("INTERNAL_API_SCREENCAP")
-            
-            if (!apiResult.startsWith("Error")) {
-                // Success! The result is the raw base64 string
-                Logger.d(TAG, "API screenshot capture successful, processing base64 data")
-                val decodeStartTime = System.currentTimeMillis()
-                val bytes = Base64.decode(apiResult, Base64.DEFAULT)
-                Logger.d(TAG, "Base64 decode took ${System.currentTimeMillis() - decodeStartTime}ms")
-                return@coroutineScope bytes
-            }
-            
-            Logger.w(TAG, "API capture failed: $apiResult, falling back to shell command")
-            
-            // Fallback to shell command
-            // Capture screenshot and pipe to base64
-            val captureResult = userService.executeCommand(
-                "screencap -p | base64 > $base64File && stat -c %s $base64File"
-            )
+            // Ensure directory exists
+            // For internal storage, this might fail if run as shell, but as system app user it should be fine
+            // We'll try mkdir but ignore specific errors if dir already exists
+            userService.executeCommand("mkdir -p $baseDir")
+
+            // Capture screenshot directly to file
+            // Note: We use 'sh -c' via executeCommand but since we are a system app,
+            // we can access the file directly if the path is in our storage space.
+            // We specify -d 0 to target the default display, reducing ambiguity on multi-display units.
+            val captureResult = userService.executeCommand("screencap -d 0 -p $pngFile")
             
             val captureTime = System.currentTimeMillis() - startTime
             Logger.d(TAG, "Screenshot capture took ${captureTime}ms")
-            
-            // Check for errors
-            if (captureResult.contains("Error") || captureResult.contains("permission denied", ignoreCase = true)) {
-                Logger.w(TAG, "Screenshot capture failed: $captureResult")
+
+            // Check if file exists and is readable
+            val file = java.io.File(pngFile)
+            if (!file.exists() || file.length() == 0L) {
+                Logger.w(TAG, "Screenshot file not created or empty: $captureResult")
+                
+                // Debug: List displays to help troubleshoot ID mismatch
+                val ids = userService.executeCommand("dumpsys SurfaceFlinger --display-id")
+                Logger.w(TAG, "Available Display IDs: $ids")
+                
                 return@coroutineScope null
             }
             
-            // Parse base64 file size from output
-            val base64Size = captureResult.lines()
-                .firstOrNull { it.trim().all { c -> c.isDigit() } }
-                ?.trim()?.toLongOrNull() ?: 0L
+            Logger.d(TAG, "Screenshot file size: ${file.length()} bytes")
             
-            if (base64Size == 0L) {
-                Logger.w(TAG, "Base64 file not created or empty")
-                return@coroutineScope null
-            }
-            
-            Logger.d(TAG, "Base64 file size: $base64Size bytes")
-            
-            // Read base64 file
-            val readStartTime = System.currentTimeMillis()
-            val base64Data: String
-            
-            if (base64Size <= BASE64_CHUNK_SIZE) {
-                // Small file - read in one go
-                val result = userService.executeCommand("cat $base64File")
-                base64Data = result.lines()
-                    .filter { line -> 
-                        !line.startsWith("[") && 
-                        line.isNotBlank() && 
-                        !line.contains("exit code", ignoreCase = true)
-                    }
-                    .joinToString("")
-            } else {
-                // Large file - read chunks sequentially to avoid Binder buffer overflow
-                val chunkCount = ((base64Size + BASE64_CHUNK_SIZE - 1) / BASE64_CHUNK_SIZE).toInt()
-                Logger.d(TAG, "Reading $chunkCount chunks sequentially")
-                
-                val chunks = mutableListOf<String>()
-                
-                for (index in 0 until chunkCount) {
-                    val offset = index.toLong() * BASE64_CHUNK_SIZE
-                    val remaining = base64Size - offset
-                    val currentChunkSize = minOf(BASE64_CHUNK_SIZE.toLong(), remaining)
-                    
-                    val chunkResult = userService.executeCommand(
-                        "tail -c +${offset + 1} $base64File | head -c $currentChunkSize"
-                    )
-                    
-                    val chunkData = chunkResult.lines()
-                        .filter { line -> 
-                            !line.startsWith("[") && 
-                            line.isNotBlank() && 
-                            !line.contains("exit code", ignoreCase = true)
-                        }
-                        .joinToString("")
-                    
-                    chunks.add(chunkData)
-                }
-                
-                base64Data = chunks.joinToString("")
-            }
-            
-            val readTime = System.currentTimeMillis() - readStartTime
-            Logger.d(TAG, "Base64 read took ${readTime}ms, total length: ${base64Data.length}")
-            
-            if (base64Data.isBlank()) {
-                Logger.w(TAG, "No base64 data read")
-                return@coroutineScope null
-            }
-            
-            Base64.decode(base64Data, Base64.DEFAULT)
+            // Read file directly
+            return@coroutineScope file.readBytes()
+
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to capture screenshot to bytes", e)
             null
         } finally {
-            // Clean up temp files
+            // Clean up
             try {
-                userService.executeCommand("rm -f $pngFile $base64File")
+                userService.executeCommand("rm -f $pngFile")
             } catch (_: Exception) {
-                // Ignore cleanup errors
             }
         }
     }
@@ -411,7 +364,7 @@ class ScreenshotService(
             base64Data = base64Data,
             width = FALLBACK_WIDTH,
             height = FALLBACK_HEIGHT,
-            isSensitive = true
+            isSensitive = false
         )
     }
     

@@ -28,7 +28,7 @@ import java.io.InputStreamReader
  */
 class SystemService(private val context: Context) : IUserService.Stub() {
 
-    private val instrumentation = Instrumentation()
+
     private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val packageManager = context.packageManager
@@ -61,11 +61,9 @@ class SystemService(private val context: Context) : IUserService.Stub() {
     override fun executeCommand(command: String): String {
         return try {
             when {
-                // New internal command for API-based screenshot
-                command == "INTERNAL_API_SCREENCAP" -> executeDirectScreencap()
-                command.startsWith("input tap ") -> executeTap(command)
-                command.startsWith("input swipe ") -> executeSwipe(command)
-                command.startsWith("input keyevent ") -> executeKeyEvent(command)
+                command.startsWith("input tap ") -> executeShellCommand(command)
+                command.startsWith("input swipe ") -> executeShellCommand(command)
+                command.startsWith("input keyevent ") -> executeShellCommand(command)
                 command.startsWith("screencap ") -> executeScreencap(command)
                 command.startsWith("am start ") -> executeAmStart(command)
                 command.startsWith("dumpsys window") -> executeDumpsysWindow()
@@ -83,171 +81,7 @@ class SystemService(private val context: Context) : IUserService.Stub() {
         }
     }
 
-    /**
-     * Executes input tap command using Instrumentation.
-     */
-    private fun executeTap(command: String): String {
-        val parts = command.split(" ")
-        if (parts.size < 3) {
-            return "Error: invalid tap command"
-        }
 
-        val x = parts[2].toIntOrNull() ?: return "Error: invalid x coordinate"
-        val y = parts[3].toIntOrNull() ?: return "Error: invalid y coordinate"
-
-        return try {
-            val downTime = SystemClock.uptimeMillis()
-            val eventTime = SystemClock.uptimeMillis()
-
-            val downEvent = MotionEvent.obtain(
-                downTime, eventTime, MotionEvent.ACTION_DOWN,
-                x.toFloat(), y.toFloat(), 0
-            )
-            downEvent.source = InputDevice.SOURCE_TOUCHSCREEN
-
-            val upEvent = MotionEvent.obtain(
-                downTime, eventTime + 10, MotionEvent.ACTION_UP,
-                x.toFloat(), y.toFloat(), 0
-            )
-            upEvent.source = InputDevice.SOURCE_TOUCHSCREEN
-
-            instrumentation.sendPointerSync(downEvent)
-            instrumentation.sendPointerSync(upEvent)
-
-            downEvent.recycle()
-            upEvent.recycle()
-
-            "[exit code: 0]"
-        } catch (e: Exception) {
-            "Error: ${e.message}\n[exit code: 1]"
-        }
-    }
-
-    /**
-     * Executes input swipe command using Instrumentation.
-     */
-    private fun executeSwipe(command: String): String {
-        val parts = command.split(" ")
-        if (parts.size < 6) {
-            return "Error: invalid swipe command"
-        }
-
-        val x1 = parts[2].toIntOrNull() ?: return "Error: invalid x1 coordinate"
-        val y1 = parts[3].toIntOrNull() ?: return "Error: invalid y1 coordinate"
-        val x2 = parts[4].toIntOrNull() ?: return "Error: invalid x2 coordinate"
-        val y2 = parts[5].toIntOrNull() ?: return "Error: invalid y2 coordinate"
-        val duration = if (parts.size > 6) parts[6].toLongOrNull() ?: 300L else 300L
-
-        return try {
-            val downTime = SystemClock.uptimeMillis()
-            val steps = maxOf(10, (duration / 10).toInt())
-            val stepDelay = duration / steps
-
-            // Touch down
-            val downEvent = MotionEvent.obtain(
-                downTime, downTime, MotionEvent.ACTION_DOWN,
-                x1.toFloat(), y1.toFloat(), 0
-            )
-            downEvent.source = InputDevice.SOURCE_TOUCHSCREEN
-            instrumentation.sendPointerSync(downEvent)
-            downEvent.recycle()
-
-            // Move
-            for (i in 1 until steps) {
-                val progress = i.toFloat() / steps
-                val x = x1 + (x2 - x1) * progress
-                val y = y1 + (y2 - y1) * progress
-                val eventTime = downTime + (stepDelay * i)
-
-                val moveEvent = MotionEvent.obtain(
-                    downTime, eventTime, MotionEvent.ACTION_MOVE,
-                    x, y, 0
-                )
-                moveEvent.source = InputDevice.SOURCE_TOUCHSCREEN
-                instrumentation.sendPointerSync(moveEvent)
-                moveEvent.recycle()
-
-                SystemClock.sleep(stepDelay)
-            }
-
-            // Touch up
-            val upTime = downTime + duration
-            val upEvent = MotionEvent.obtain(
-                downTime, upTime, MotionEvent.ACTION_UP,
-                x2.toFloat(), y2.toFloat(), 0
-            )
-            upEvent.source = InputDevice.SOURCE_TOUCHSCREEN
-            instrumentation.sendPointerSync(upEvent)
-            upEvent.recycle()
-
-            "[exit code: 0]"
-        } catch (e: Exception) {
-            "Error: ${e.message}\n[exit code: 1]"
-        }
-    }
-
-    /**
-     * Executes input keyevent command using Instrumentation.
-     */
-    private fun executeKeyEvent(command: String): String {
-        val parts = command.split(" ")
-        if (parts.size < 3) {
-            return "Error: invalid keyevent command"
-        }
-
-        val keyCode = parts[2].toIntOrNull() ?: return "Error: invalid keycode"
-
-        return try {
-            val downTime = SystemClock.uptimeMillis()
-            val eventTime = SystemClock.uptimeMillis()
-
-            val downEvent = KeyEvent(downTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0)
-            val upEvent = KeyEvent(downTime, eventTime + 10, KeyEvent.ACTION_UP, keyCode, 0)
-
-            instrumentation.sendKeySync(downEvent)
-            instrumentation.sendKeySync(upEvent)
-
-            "[exit code: 0]"
-        } catch (e: Exception) {
-            "Error: ${e.message}\n[exit code: 1]"
-        }
-    }
-
-    /**
-     * Executes screencap directly using Instrumentation API.
-     * Returns Base64 encoded image string.
-     */
-    private fun executeDirectScreencap(): String {
-        return try {
-            val bitmap = instrumentation.uiAutomation.takeScreenshot()
-            if (bitmap != null) {
-                // Compress to WebP and encode to Base64 in memory
-                val outputStream = java.io.ByteArrayOutputStream()
-                val format = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                    android.graphics.Bitmap.CompressFormat.WEBP_LOSSY
-                } else {
-                    @Suppress("DEPRECATION")
-                    android.graphics.Bitmap.CompressFormat.WEBP
-                }
-                // Use 65 quality as defined in ScreenshotService
-                bitmap.compress(format, 65, outputStream)
-                bitmap.recycle()
-                
-                val base64Data = android.util.Base64.encodeToString(
-                    outputStream.toByteArray(), 
-                    android.util.Base64.NO_WRAP
-                )
-                
-                // Return just the base64 string, ScreenshotService will handle it
-                base64Data
-            } else {
-                "Error: Failed to take screenshot (bitmap is null)\n[exit code: 1]"
-            }
-        } catch (e: Exception) {
-            Logger.e(TAG, "Error capturing screenshot via API", e)
-            "Error: ${e.message}\n[exit code: 1]"
-        }
-    }
 
     /**
      * Executes screencap command using System API.
