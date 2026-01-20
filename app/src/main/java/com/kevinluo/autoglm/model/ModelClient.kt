@@ -34,7 +34,7 @@ import kotlin.coroutines.resume
  */
 data class ModelConfig(
     val baseUrl: String = "https://open.bigmodel.cn/api/paas/v4",
-    val apiKey: String = "EMPTY",
+    val apiKey: String = "",
     val modelName: String = "autoglm-phone",
     val maxTokens: Int = 3000,
     val temperature: Float = 0.0f,

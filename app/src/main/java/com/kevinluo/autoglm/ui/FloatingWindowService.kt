@@ -18,6 +18,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 // Note: RecyclerView may not be available in system build
 // import androidx.recyclerview.widget.LinearLayoutManager
@@ -110,12 +111,13 @@ class FloatingWindowService : Service(), FloatingWindowController {
     // Steps list for waterfall display
     private val stepsList = mutableListOf<FloatingStep>()
     private var stepsAdapter: StepsAdapter? = null
+    private val stepViews = mutableMapOf<Int, View>()  // Map stepNumber to View for direct updates
 
     companion object {
         private const val TAG = "FloatingWindow"
 
         // Window size as percentage of screen
-        private const val WIDTH_PERCENT = 0.80f
+        private const val WIDTH_PERCENT = 0.40f  // Reduced to half of original (0.80f -> 0.40f)
         private const val HEIGHT_PERCENT = 0.50f
 
         @Volatile
@@ -311,19 +313,42 @@ class FloatingWindowService : Service(), FloatingWindowController {
      */
     fun addStep(stepNumber: Int, thinking: String, action: AgentAction?) {
         serviceScope.launch {
-            val step = FloatingStep(
-                stepNumber = stepNumber,
-                thinking = thinking,
-                action = action?.formatForDisplay() ?: "无"
-            )
-            stepsList.add(step)
-            stepsAdapter?.notifyItemInserted(stepsList.size - 1)
+            // Check if a step with this stepNumber already exists (created by updateThinking)
+            val existingIndex = stepsList.indexOfFirst { it.stepNumber == stepNumber }
 
-            // Scroll to bottom
-            // Note: RecyclerView not available in system build
-            // floatingView?.findViewById<RecyclerView>(R.id.steps_recycler_view)?.let { rv ->
-            //     rv.scrollToPosition(stepsList.size - 1)
-            // }
+            val step = if (existingIndex >= 0) {
+                // Update existing step: preserve existing thinking if it's more detailed, only update action
+                val existingStep = stepsList[existingIndex]
+                val finalThinking = if (existingStep.thinking.isNotBlank() &&
+                    (thinking.isBlank() || thinking == existingStep.thinking ||
+                     existingStep.thinking.length > thinking.length)) {
+                    // Keep existing thinking if it's more detailed or same
+                    existingStep.thinking
+                } else {
+                    // Use new thinking if it's different and not blank
+                    thinking
+                }
+
+                stepsList[existingIndex].copy(
+                    thinking = finalThinking,
+                    action = action?.formatForDisplay() ?: "无"
+                ).also { updatedStep ->
+                    stepsList[existingIndex] = updatedStep
+                }
+            } else {
+                // Create new step
+                FloatingStep(
+                    stepNumber = stepNumber,
+                    thinking = thinking,
+                    action = action?.formatForDisplay() ?: "无"
+                ).also { newStep ->
+                    stepsList.add(newStep)
+                }
+            }
+
+            // Update UI using LinearLayout
+            updateStepView(step)
+            stepsAdapter?.notifyItemChanged(existingIndex.takeIf { it >= 0 } ?: stepsList.size - 1)
 
             // Update step counter
             currentStepNumber = stepNumber
@@ -334,16 +359,45 @@ class FloatingWindowService : Service(), FloatingWindowController {
 
     /**
      * Updates the thinking text for the current (last) step.
+     * If no step exists yet, creates a new step with the thinking text.
      *
      * @param thinking The new thinking text to display
      *
      */
     fun updateThinking(thinking: String) {
         serviceScope.launch {
+            // Only update if thinking is not blank
+            if (thinking.isBlank()) {
+                return@launch
+            }
+
+            // Only update the last step if it exists and matches current step number
+            // This prevents creating duplicate steps
             if (stepsList.isNotEmpty()) {
                 val lastIndex = stepsList.size - 1
-                stepsList[lastIndex] = stepsList[lastIndex].copy(thinking = thinking)
-                stepsAdapter?.notifyItemChanged(lastIndex)
+                val lastStep = stepsList[lastIndex]
+
+                // Only update if:
+                // 1. The step number matches current step number (same step)
+                // 2. The thinking is different (avoid unnecessary updates)
+                if (lastStep.stepNumber == currentStepNumber && lastStep.thinking != thinking) {
+                    // Update existing step's thinking
+                    val updatedStep = lastStep.copy(thinking = thinking)
+                    stepsList[lastIndex] = updatedStep
+                    updateStepView(updatedStep)
+                }
+                // If step number doesn't match or thinking is same, skip update
+                // This prevents duplicate steps when addStep is called later
+            } else if (currentStepNumber > 0) {
+                // Only create a new step if no steps exist and a step has started
+                // This creates a placeholder step that will be updated by addStep
+                val newStep = FloatingStep(
+                    stepNumber = currentStepNumber,
+                    thinking = thinking,
+                    action = "思考中..."
+                )
+                stepsList.add(newStep)
+                updateStepView(newStep)
             }
         }
     }
@@ -379,6 +433,7 @@ class FloatingWindowService : Service(), FloatingWindowController {
             // If switching to RUNNING, clear previous steps
             if (status == TaskStatus.RUNNING) {
                 stepsList.clear()
+                clearStepViews()
                 stepsAdapter?.notifyDataSetChanged()
                 currentStepNumber = 0
                 floatingView?.let { view ->
@@ -461,6 +516,7 @@ class FloatingWindowService : Service(), FloatingWindowController {
         serviceScope.launch {
             Logger.d(TAG, "reset() called - clearing steps and resetting to IDLE")
             stepsList.clear()
+            clearStepViews()
             stepsAdapter?.notifyDataSetChanged()
             currentStepNumber = 0
 
@@ -594,8 +650,8 @@ class FloatingWindowService : Service(), FloatingWindowController {
         Logger.d(TAG, "updateUIForStatus called with status: $status")
         floatingView?.let { view ->
             val inputArea = view.findViewById<LinearLayout>(R.id.input_area)
-            // Note: RecyclerView may not be available in system build
-            val stepsRecycler = view.findViewById<View>(R.id.steps_recycler_view)
+            // Using ScrollView with LinearLayout instead of RecyclerView for system build compatibility
+            val stepsRecycler = view.findViewById<ScrollView>(R.id.steps_scroll_view)
             val controlButtonsContainer = view.findViewById<LinearLayout>(R.id.control_buttons_container)
             val stopBtn = view.findViewById<Button>(R.id.btn_stop)
             val pauseBtn = view.findViewById<Button>(R.id.btn_pause)
@@ -776,16 +832,88 @@ class FloatingWindowService : Service(), FloatingWindowController {
     /**
      * Sets up the RecyclerView for displaying steps.
      * Note: RecyclerView may not be available in system build
+     * Using LinearLayout instead for system build compatibility
      */
     private fun setupRecyclerView() {
         // Note: RecyclerView not available in system build
-        // val recyclerView = floatingView?.findViewById<RecyclerView>(R.id.steps_recycler_view)
-        // recyclerView?.let { rv ->
-        //     rv.layoutManager = LinearLayoutManager(this)
-        //     stepsAdapter = StepsAdapter(stepsList)
-        //     rv.adapter = stepsAdapter
-        // }
+        // Using LinearLayout container instead
         stepsAdapter = StepsAdapter(stepsList)
+        // Clear any existing step views
+        stepViews.clear()
+    }
+
+    /**
+     * Creates or updates a step view in the LinearLayout container.
+     */
+    private fun updateStepView(step: FloatingStep) {
+        serviceScope.launch(Dispatchers.Main) {
+            val container = floatingView?.findViewById<LinearLayout>(R.id.steps_container) ?: return@launch
+            val scrollView = floatingView?.findViewById<ScrollView>(R.id.steps_scroll_view)
+
+            val existingView = stepViews[step.stepNumber]
+            if (existingView != null) {
+                // Update existing view (avoid duplicate display)
+                updateStepViewContent(existingView, step)
+
+                // Scroll to bottom to show updated content
+                scrollView?.post {
+                    scrollView.fullScroll(android.view.View.FOCUS_DOWN)
+                }
+            } else {
+                // Create new view only if it doesn't exist
+                val stepView = createStepView(step)
+                stepViews[step.stepNumber] = stepView
+                container.addView(stepView)
+
+                // Scroll to bottom
+                scrollView?.post {
+                    scrollView.fullScroll(android.view.View.FOCUS_DOWN)
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates a view for a step.
+     */
+    private fun createStepView(step: FloatingStep): View {
+        val themedContext = android.view.ContextThemeWrapper(this, R.style.Theme_AutoGLM)
+        val view = LayoutInflater.from(themedContext).inflate(R.layout.item_floating_step, null)
+        updateStepViewContent(view, step)
+        return view
+    }
+
+    /**
+     * Updates the content of a step view.
+     */
+    private fun updateStepViewContent(view: View, step: FloatingStep) {
+        val stepNumber = view.findViewById<TextView>(R.id.step_number)
+        val thinkingText = view.findViewById<TextView>(R.id.thinking_text)
+        val actionText = view.findViewById<TextView>(R.id.action_text)
+
+        stepNumber?.text = step.stepNumber.toString()
+
+        // Update thinking text
+        if (step.thinking.isBlank()) {
+            thinkingText?.visibility = View.GONE
+        } else {
+            thinkingText?.visibility = View.VISIBLE
+            thinkingText?.text = step.thinking
+        }
+
+        // Update action text
+        actionText?.text = step.action
+    }
+
+    /**
+     * Removes all step views from the container.
+     */
+    private fun clearStepViews() {
+        serviceScope.launch(Dispatchers.Main) {
+            val container = floatingView?.findViewById<LinearLayout>(R.id.steps_container) ?: return@launch
+            container.removeAllViews()
+            stepViews.clear()
+        }
     }
 
     /**
@@ -1066,8 +1194,8 @@ class FloatingWindowService : Service(), FloatingWindowController {
      */
     private fun toggleMinimize() {
         val inputArea = floatingView?.findViewById<LinearLayout>(R.id.input_area)
-        // Note: RecyclerView may not be available in system build
-        val recyclerView = floatingView?.findViewById<View>(R.id.steps_recycler_view)
+        // Using ScrollView with LinearLayout instead of RecyclerView
+        val recyclerView = floatingView?.findViewById<ScrollView>(R.id.steps_scroll_view)
         val resultView = floatingView?.findViewById<TextView>(R.id.tv_result)
         val stopBtn = floatingView?.findViewById<Button>(R.id.btn_stop)
         val pauseBtn = floatingView?.findViewById<Button>(R.id.btn_pause)
@@ -1095,6 +1223,7 @@ class FloatingWindowService : Service(), FloatingWindowController {
             minimizeBtn?.setImageResource(R.drawable.ic_plus)
 
             // Shrink window to just header - use fixed height based on header size
+            // Minimized width is 80% of the already reduced width
             layoutParams?.width = (screenWidth * WIDTH_PERCENT * 0.8).toInt()
             // Use a fixed height for minimized state (header height ~48dp)
             val headerHeight = (48 * displayMetrics.density).toInt()

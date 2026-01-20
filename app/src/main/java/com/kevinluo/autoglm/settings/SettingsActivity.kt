@@ -113,6 +113,20 @@ class SettingsActivity : Activity() {
     private lateinit var sensitivitySlider: SeekBar
     private var voiceModelManager: VoiceModelManager? = null
 
+    // Permissions & system settings views
+    private lateinit var overlayStatusIcon: android.widget.ImageView
+    private lateinit var overlayStatusText: TextView
+    private lateinit var requestOverlayBtn: Button
+    private lateinit var keyboardStatusIcon: android.widget.ImageView
+    private lateinit var keyboardStatusText: TextView
+    private lateinit var enableKeyboardBtn: Button
+    private lateinit var batteryStatusIcon: android.widget.ImageView
+    private lateinit var batteryStatusText: TextView
+    private lateinit var requestBatteryOptBtn: Button
+
+    // History button
+    private lateinit var historyBtn: View
+
     // Profile data
     private var savedProfiles: List<SavedModelProfile> = emptyList()
     private var currentProfileId: String? = null
@@ -155,6 +169,14 @@ class SettingsActivity : Activity() {
         initViews()
         loadCurrentSettings()
         setupListeners()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Logger.d(TAG, "onResume - checking for permissions changes")
+
+        // Update permissions & system settings status (user may have changed them)
+        loadPermissionsAndSystemSettings()
     }
 
     /**
@@ -224,6 +246,20 @@ class SettingsActivity : Activity() {
         switchContinuousListening = findViewById(R.id.switchContinuousListening)
         wakeWordInput = findViewById(R.id.wakeWordInput)
         sensitivitySlider = findViewById(R.id.sensitivitySlider)
+
+        // Permissions & system settings
+        overlayStatusIcon = findViewById(R.id.overlayStatusIcon)
+        overlayStatusText = findViewById(R.id.overlayStatusText)
+        requestOverlayBtn = findViewById(R.id.requestOverlayBtn)
+        keyboardStatusIcon = findViewById(R.id.keyboardStatusIcon)
+        keyboardStatusText = findViewById(R.id.keyboardStatusText)
+        enableKeyboardBtn = findViewById(R.id.enableKeyboardBtn)
+        batteryStatusIcon = findViewById(R.id.batteryStatusIcon)
+        batteryStatusText = findViewById(R.id.batteryStatusText)
+        requestBatteryOptBtn = findViewById(R.id.requestBatteryOptBtn)
+
+        // History button
+        historyBtn = findViewById(R.id.historyBtn)
     }
 
     /**
@@ -249,6 +285,9 @@ class SettingsActivity : Activity() {
 
         // Load voice settings
         loadVoiceSettings()
+
+        // Load permissions & system settings
+        loadPermissionsAndSystemSettings()
 
         // Populate model settings
         baseUrlInput.setText(modelConfig.baseUrl)
@@ -377,6 +416,11 @@ class SettingsActivity : Activity() {
             onVoiceModelActionClick()
         }
 
+        // History button
+        historyBtn.setOnClickListener {
+            startActivity(Intent(this, com.kevinluo.autoglm.history.HistoryActivity::class.java))
+        }
+
         switchContinuousListening.setOnCheckedChangeListener { _, isChecked ->
             // Skip if this is a programmatic change (not user interaction)
             if (!switchContinuousListening.isPressed) {
@@ -425,6 +469,19 @@ class SettingsActivity : Activity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+
+        // Permissions & system settings listeners
+        requestOverlayBtn.setOnClickListener {
+            com.kevinluo.autoglm.ui.FloatingWindowService.requestOverlayPermission(this)
+        }
+
+        enableKeyboardBtn.setOnClickListener {
+            com.kevinluo.autoglm.input.KeyboardHelper.openInputMethodSettings(this)
+        }
+
+        requestBatteryOptBtn.setOnClickListener {
+            com.kevinluo.autoglm.util.KeepAliveManager.requestIgnoreBatteryOptimizations(this)
+        }
 
         // Clear errors on text change
         baseUrlInput.setOnFocusChangeListener { _, _ -> baseUrlInput.error = null }
@@ -1316,5 +1373,78 @@ class SettingsActivity : Activity() {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
         settingsManager.setWakeWords(wakeWords)
+    }
+
+    // ==================== Permissions & System Settings ====================
+
+    /**
+     * Loads and updates permissions & system settings status.
+     */
+    private fun loadPermissionsAndSystemSettings() {
+        Logger.d(TAG, "Loading permissions & system settings")
+
+        // Update overlay permission status
+        updateOverlayPermissionStatus()
+
+        // Update keyboard status
+        updateKeyboardStatus()
+
+        // Update battery optimization status
+        updateBatteryOptimizationStatus()
+    }
+
+    /**
+     * Updates the overlay permission status display.
+     */
+    private fun updateOverlayPermissionStatus() {
+        val hasPermission = com.kevinluo.autoglm.ui.FloatingWindowService.canDrawOverlays(this)
+
+        if (hasPermission) {
+            overlayStatusText.text = getString(R.string.overlay_permission_granted)
+            overlayStatusIcon.setColorFilter(getColor(R.color.status_running))
+            requestOverlayBtn.visibility = View.GONE
+        } else {
+            overlayStatusText.text = getString(R.string.overlay_permission_denied)
+            overlayStatusIcon.setColorFilter(getColor(R.color.status_waiting))
+            requestOverlayBtn.visibility = View.VISIBLE
+        }
+    }
+
+    /**
+     * Updates the keyboard status display.
+     */
+    private fun updateKeyboardStatus() {
+        val status = com.kevinluo.autoglm.input.KeyboardHelper.getAutoGLMKeyboardStatus(this)
+
+        when (status) {
+            com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.ENABLED -> {
+                keyboardStatusText.text = getString(R.string.keyboard_settings_subtitle)
+                keyboardStatusIcon.setColorFilter(getColor(R.color.status_running))
+                enableKeyboardBtn.visibility = View.GONE
+            }
+            com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.NOT_ENABLED -> {
+                keyboardStatusText.text = getString(R.string.keyboard_not_enabled)
+                keyboardStatusIcon.setColorFilter(getColor(R.color.status_waiting))
+                enableKeyboardBtn.visibility = View.VISIBLE
+                enableKeyboardBtn.text = getString(R.string.enable_keyboard)
+            }
+        }
+    }
+
+    /**
+     * Updates the battery optimization status display.
+     */
+    private fun updateBatteryOptimizationStatus() {
+        val isIgnoring = com.kevinluo.autoglm.util.KeepAliveManager.isIgnoringBatteryOptimizations(this)
+
+        if (isIgnoring) {
+            batteryStatusText.text = getString(R.string.battery_opt_ignored)
+            batteryStatusIcon.setColorFilter(getColor(R.color.status_running))
+            requestBatteryOptBtn.visibility = View.GONE
+        } else {
+            batteryStatusText.text = getString(R.string.battery_opt_not_ignored)
+            batteryStatusIcon.setColorFilter(getColor(R.color.status_waiting))
+            requestBatteryOptBtn.visibility = View.VISIBLE
+        }
     }
 }

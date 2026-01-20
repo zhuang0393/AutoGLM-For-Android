@@ -74,12 +74,46 @@ class AppResolver(private val packageManager: PackageManager) {
         var bestScore = 0.0
 
         for (app in apps) {
-            val score = calculateSimilarity(normalizedQuery, app.displayName.lowercase())
-            if (score > 0.1) {
-                Logger.d(TAG, "  Similarity '${app.displayName}': $score")
+            val nameScore = calculateSimilarity(normalizedQuery, app.displayName.lowercase())
+
+            // Match against full package name
+            val packageScore = calculateSimilarity(normalizedQuery, app.packageName.lowercase())
+
+            // Match against package name components (e.g., "bilibili" in "com.bilibili.bilithings")
+            val packageComponents = app.packageName.lowercase().split('.')
+
+            // Check for exact component match first (fast path)
+            val hasExactComponentMatch = packageComponents.any { it == normalizedQuery }
+            val componentScores = if (hasExactComponentMatch) {
+                // If exact match found, use 1.0 directly
+                listOf(1.0)
+            } else {
+                packageComponents.map { component ->
+                    val score = calculateSimilarity(normalizedQuery, component)
+                    if (score > 0.1) {
+                        Logger.d(TAG, "    Component '$component' score: $score")
+                    }
+                    score
+                }
             }
-            if (score > bestScore && score >= MIN_SIMILARITY_THRESHOLD) {
-                bestScore = score
+            val bestComponentScore = componentScores.maxOrNull() ?: 0.0
+
+            // For exact component matches, use full weight (1.0), otherwise use 0.9
+            val componentMatchWeight = if (bestComponentScore >= 1.0) 1.0 else 0.9
+            val adjustedPackageScore = maxOf(packageScore, bestComponentScore) * componentMatchWeight
+            val finalScore = maxOf(nameScore, adjustedPackageScore)
+
+            // Log detailed info for debugging
+            if (hasExactComponentMatch || bestComponentScore > 0.5) {
+                Logger.d(TAG, "  Package component match for '${app.packageName}': exact=$hasExactComponentMatch, score=$bestComponentScore, adjusted=$adjustedPackageScore")
+            }
+
+            if (finalScore > 0.1 || packageComponents.any { it.contains(normalizedQuery) || normalizedQuery.contains(it) }) {
+                Logger.d(TAG, "  Similarity '${app.displayName}' (${app.packageName}): $finalScore (name: $nameScore, pkg: $adjustedPackageScore, component: $bestComponentScore)")
+            }
+
+            if (finalScore > bestScore && finalScore >= MIN_SIMILARITY_THRESHOLD) {
+                bestScore = finalScore
                 bestMatch = app
             }
         }
@@ -92,7 +126,7 @@ class AppResolver(private val packageManager: PackageManager) {
 
         return bestMatch?.packageName
     }
-    
+
     /**
      * Returns all installed launchable applications.
      *
@@ -107,21 +141,21 @@ class AppResolver(private val packageManager: PackageManager) {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
-        
+
         val resolveInfoList: List<ResolveInfo> = packageManager.queryIntentActivities(intent, 0)
-        
+
         return resolveInfoList.mapNotNull { resolveInfo ->
             val activityInfo = resolveInfo.activityInfo ?: return@mapNotNull null
             val displayName = resolveInfo.loadLabel(packageManager)?.toString() ?: return@mapNotNull null
             val packageName = activityInfo.packageName ?: return@mapNotNull null
-            
+
             AppInfo(
                 displayName = displayName,
                 packageName = packageName
             )
         }.distinctBy { it.packageName }
     }
-    
+
     /**
      * Searches for apps matching the given query.
      *
@@ -136,17 +170,27 @@ class AppResolver(private val packageManager: PackageManager) {
         if (query.isBlank()) {
             return emptyList()
         }
-        
+
         val normalizedQuery = query.lowercase().trim()
         val apps = getAllLaunchableApps()
-        
+
         return apps
-            .map { app -> app to calculateSimilarity(normalizedQuery, app.displayName.lowercase()) }
+            .map { app ->
+                val nameScore = calculateSimilarity(normalizedQuery, app.displayName.lowercase())
+                val packageScore = calculateSimilarity(normalizedQuery, app.packageName.lowercase())
+                val packageComponents = app.packageName.lowercase().split('.')
+                val bestComponentScore = packageComponents.map { calculateSimilarity(normalizedQuery, it) }.maxOrNull() ?: 0.0
+
+                val adjustedPackageScore = maxOf(packageScore, bestComponentScore) * 0.9
+                val finalScore = maxOf(nameScore, adjustedPackageScore)
+
+                app to finalScore
+            }
             .filter { (_, score) -> score >= MIN_SIMILARITY_THRESHOLD }
             .sortedByDescending { (_, score) -> score }
             .map { (app, _) -> app }
     }
-    
+
     /**
      * Calculates the similarity between two strings.
      *
@@ -166,41 +210,41 @@ class AppResolver(private val packageManager: PackageManager) {
         if (query == target) {
             return 1.0
         }
-        
+
         // Target contains query exactly
         if (target.contains(query)) {
             // Score based on how much of the target is covered by the query
             val coverageScore = query.length.toDouble() / target.length
             return 0.8 + (coverageScore * 0.15) // Range: 0.8 to 0.95
         }
-        
+
         // Target starts with query
         if (target.startsWith(query)) {
             val coverageScore = query.length.toDouble() / target.length
             return 0.75 + (coverageScore * 0.15) // Range: 0.75 to 0.9
         }
-        
+
         // Query starts with target (e.g., query="wechat app" target="wechat")
         if (query.startsWith(target)) {
             val coverageScore = target.length.toDouble() / query.length
             return 0.7 + (coverageScore * 0.15) // Range: 0.7 to 0.85
         }
-        
+
         // Fuzzy matching using Levenshtein distance
         val distance = levenshteinDistance(query, target)
         val maxLength = maxOf(query.length, target.length)
-        
+
         if (maxLength == 0) {
             return 0.0
         }
-        
+
         // Convert distance to similarity score
         val similarity = 1.0 - (distance.toDouble() / maxLength)
-        
+
         // Scale down fuzzy matches to be below exact/contains matches
         return similarity * 0.7
     }
-    
+
     /**
      * Calculates the Levenshtein distance between two strings.
      *

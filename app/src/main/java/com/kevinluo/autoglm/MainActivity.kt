@@ -45,10 +45,14 @@ import com.kevinluo.autoglm.voice.VoiceModelManager
 import com.kevinluo.autoglm.voice.VoiceModelDownloadListener
 import com.kevinluo.autoglm.voice.VoiceRecordingDialog
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.ImageView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.kevinluo.autoglm.history.HistoryManager
 
 /**
  * Main activity for the AutoGLM Phone Agent application.
@@ -83,23 +87,7 @@ class MainActivity : Activity(), PhoneAgentListener {
     private lateinit var openShizukuBtn: Button
     private lateinit var settingsBtn: ImageButton
 
-    // Overlay permission views
-    private lateinit var overlayPermissionCard: View
-    private lateinit var overlayStatusIcon: android.widget.ImageView
-    private lateinit var overlayStatusText: TextView
-    private lateinit var requestOverlayBtn: Button
-
-    // Keyboard views
-    private lateinit var keyboardCard: View
-    private lateinit var keyboardStatusIcon: android.widget.ImageView
-    private lateinit var keyboardStatusText: TextView
-    private lateinit var enableKeyboardBtn: Button
-
-    // Battery optimization views
-    private var batteryOptCard: View? = null
-    private var batteryStatusIcon: android.widget.ImageView? = null
-    private var batteryStatusText: TextView? = null
-    private var requestBatteryOptBtn: Button? = null
+    // Overlay permission and keyboard views removed - moved to SettingsActivity
 
     // Task input views
     private lateinit var taskInput: EditText
@@ -125,6 +113,12 @@ class MainActivity : Activity(), PhoneAgentListener {
     private var voiceInputManager: VoiceInputManager? = null
     private var isVoiceRecording = false
     private var voiceRecordingDialog: VoiceRecordingDialog? = null
+
+    // Recent history and demo suggestions
+    private lateinit var recentHistorySection: View
+    private lateinit var recentHistoryList: LinearLayout
+    private lateinit var demoSuggestionsSection: View
+    private lateinit var demoSuggestionsList: LinearLayout
 
     private val audioPermissionRequestCode = 1001
 
@@ -207,12 +201,15 @@ class MainActivity : Activity(), PhoneAgentListener {
         if (!isSystemBuild()) {
             updateShizukuStatus()
         }
-        updateOverlayPermissionStatus()
-        updateKeyboardStatus()
+        // Overlay permission and keyboard status updates removed - moved to SettingsActivity
         updateTaskStatus(TaskStatus.IDLE)
 
         // Restore continuous listening service if it was enabled
         restoreContinuousListeningService()
+
+        // Load and display recent history and demo suggestions
+        loadRecentHistory()
+        loadDemoSuggestions()
 
         // 检查是否是从唤醒词启动的
         handleWakeWordIntent(intent)
@@ -238,69 +235,7 @@ class MainActivity : Activity(), PhoneAgentListener {
         }
     }
 
-    /**
-     * Updates the overlay permission status display.
-     *
-     * Checks if the app has overlay permission and updates the UI
-     * to show the current status and appropriate action button.
-     */
-    private fun updateOverlayPermissionStatus() {
-        val hasPermission = FloatingWindowService.canDrawOverlays(this)
-
-        if (hasPermission) {
-            overlayStatusText.text = getString(R.string.overlay_permission_granted)
-            overlayStatusIcon.setColorFilter(getColor(R.color.status_running))
-            requestOverlayBtn.visibility = View.GONE
-        } else {
-            overlayStatusText.text = getString(R.string.overlay_permission_denied)
-            overlayStatusIcon.setColorFilter(getColor(R.color.status_waiting))
-            requestOverlayBtn.visibility = View.VISIBLE
-        }
-    }
-
-    /**
-     * Updates the keyboard status display.
-     *
-     * Checks if AutoGLM Keyboard is enabled and updates the UI accordingly.
-     */
-    private fun updateKeyboardStatus() {
-        val status = com.kevinluo.autoglm.input.KeyboardHelper.getAutoGLMKeyboardStatus(this)
-
-        when (status) {
-            com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.ENABLED -> {
-                keyboardStatusText.text = getString(R.string.keyboard_settings_subtitle)
-                keyboardStatusIcon.setColorFilter(getColor(R.color.status_running))
-                enableKeyboardBtn.visibility = View.GONE
-            }
-            com.kevinluo.autoglm.input.KeyboardHelper.KeyboardStatus.NOT_ENABLED -> {
-                keyboardStatusText.text = getString(R.string.keyboard_not_enabled)
-                keyboardStatusIcon.setColorFilter(getColor(R.color.status_waiting))
-                enableKeyboardBtn.visibility = View.VISIBLE
-                enableKeyboardBtn.text = getString(R.string.enable_keyboard)
-            }
-        }
-    }
-
-    /**
-     * Updates the battery optimization status display.
-     *
-     * Checks if the app is ignoring battery optimizations and updates the UI accordingly.
-     */
-    private fun updateBatteryOptimizationStatus() {
-        val isIgnoring = KeepAliveManager.isIgnoringBatteryOptimizations(this)
-
-        batteryOptCard?.visibility = View.VISIBLE
-
-        if (isIgnoring) {
-            batteryStatusText?.text = getString(R.string.battery_opt_ignored)
-            batteryStatusIcon?.setColorFilter(getColor(R.color.status_running))
-            requestBatteryOptBtn?.visibility = View.GONE
-        } else {
-            batteryStatusText?.text = getString(R.string.battery_opt_not_ignored)
-            batteryStatusIcon?.setColorFilter(getColor(R.color.status_waiting))
-            requestBatteryOptBtn?.visibility = View.VISIBLE
-        }
-    }
+    // Overlay permission, keyboard, and battery optimization status update methods removed - moved to SettingsActivity
 
     /**
      * Restores the continuous listening service if it was previously enabled.
@@ -334,14 +269,7 @@ class MainActivity : Activity(), PhoneAgentListener {
             }
         }
 
-        // Update overlay permission status (user may have granted it)
-        updateOverlayPermissionStatus()
-
-        // Update keyboard status (user may have enabled it)
-        updateKeyboardStatus()
-
-        // Update battery optimization status
-        updateBatteryOptimizationStatus()
+        // Overlay permission, keyboard, and battery optimization status updates removed - moved to SettingsActivity
 
         // Re-setup floating window callbacks if service is running
         FloatingWindowService.getInstance()?.let { service ->
@@ -424,23 +352,7 @@ class MainActivity : Activity(), PhoneAgentListener {
         openShizukuBtn = findViewById(R.id.openShizukuBtn)
         settingsBtn = findViewById(R.id.settingsBtn)
 
-        // Overlay permission views
-        overlayPermissionCard = findViewById(R.id.overlayPermissionCard)
-        overlayStatusIcon = findViewById(R.id.overlayStatusIcon)
-        overlayStatusText = findViewById(R.id.overlayStatusText)
-        requestOverlayBtn = findViewById(R.id.requestOverlayBtn)
-
-        // Keyboard views
-        keyboardCard = findViewById(R.id.keyboardCard)
-        keyboardStatusIcon = findViewById(R.id.keyboardStatusIcon)
-        keyboardStatusText = findViewById(R.id.keyboardStatusText)
-        enableKeyboardBtn = findViewById(R.id.enableKeyboardBtn)
-
-        // Battery optimization views
-        batteryOptCard = findViewById(R.id.batteryOptCard)
-        batteryStatusIcon = findViewById(R.id.batteryStatusIcon)
-        batteryStatusText = findViewById(R.id.batteryStatusText)
-        requestBatteryOptBtn = findViewById(R.id.requestBatteryOptBtn)
+        // Overlay permission and keyboard views removed - moved to SettingsActivity
 
         // Task input views
         taskInput = findViewById(R.id.taskInput)
@@ -454,6 +366,12 @@ class MainActivity : Activity(), PhoneAgentListener {
         taskStatusText = findViewById(R.id.taskStatusText)
         stepCounterText = findViewById(R.id.stepCounterText)
         runningSection = findViewById(R.id.runningSection)
+
+        // Recent history and demo suggestions
+        recentHistorySection = findViewById(R.id.recentHistorySection)
+        recentHistoryList = findViewById(R.id.recentHistoryList)
+        demoSuggestionsSection = findViewById(R.id.demoSuggestionsSection)
+        demoSuggestionsList = findViewById(R.id.demoSuggestionsList)
     }
 
     /**
@@ -477,31 +395,12 @@ class MainActivity : Activity(), PhoneAgentListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        // History button
-        findViewById<View>(R.id.historyBtn).setOnClickListener {
-            startActivity(Intent(this, com.kevinluo.autoglm.history.HistoryActivity::class.java))
-        }
-
         // Floating window button - open floating window
         findViewById<ImageButton>(R.id.floatingWindowBtn).setOnClickListener {
             openFloatingWindow()
         }
 
-        // Overlay permission button
-        requestOverlayBtn.setOnClickListener {
-            FloatingWindowService.requestOverlayPermission(this)
-        }
-
-        // Keyboard enable button
-        enableKeyboardBtn.setOnClickListener {
-            // Open input method settings to enable AutoGLM Keyboard
-            com.kevinluo.autoglm.input.KeyboardHelper.openInputMethodSettings(this)
-        }
-
-        // Battery optimization button
-        requestBatteryOptBtn?.setOnClickListener {
-            KeepAliveManager.requestIgnoreBatteryOptimizations(this)
-        }
+        // Overlay permission and keyboard buttons removed - moved to SettingsActivity
 
         // Start task button
         startTaskBtn.setOnClickListener {
@@ -1034,6 +933,8 @@ class MainActivity : Activity(), PhoneAgentListener {
     override fun onThinkingUpdate(thinking: String) {
         runOnUiThread {
             currentThinking = thinking
+            // Update floating window with real-time thinking content
+            FloatingWindowService.getInstance()?.updateThinking(thinking)
         }
     }
 
@@ -1538,6 +1439,182 @@ class MainActivity : Activity(), PhoneAgentListener {
             voiceRecordingDialog = null
         }
         voiceRecordingDialog?.show()
+    }
+
+    // endregion
+
+    // region Recent History and Demo Suggestions
+
+    /**
+     * Loads and displays recent task history.
+     */
+    private fun loadRecentHistory() {
+        activityScope.launch {
+            try {
+                val historyManager = componentManager.historyManager
+                val recentTasks = historyManager.historyList.value.take(3) // Show only 3 most recent
+
+                runOnUiThread {
+                    recentHistoryList.removeAllViews()
+
+                    if (recentTasks.isEmpty()) {
+                        recentHistorySection.visibility = View.GONE
+                        return@runOnUiThread
+                    }
+
+                    recentHistorySection.visibility = View.VISIBLE
+
+                    recentTasks.forEach { task ->
+                        val itemView = createHistoryItemView(task)
+                        recentHistoryList.addView(itemView)
+                    }
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "Failed to load recent history", e)
+            }
+        }
+    }
+
+    /**
+     * Creates a view for a history item.
+     */
+    private fun createHistoryItemView(task: com.kevinluo.autoglm.history.TaskHistory): View {
+        val card = android.view.LayoutInflater.from(this).inflate(R.layout.item_history_task, recentHistoryList, false)
+
+        val taskDescription = card.findViewById<TextView>(R.id.taskDescription)
+        val timeText = card.findViewById<TextView>(R.id.timeText)
+        val stepsText = card.findViewById<TextView>(R.id.stepsText)
+        val durationText = card.findViewById<TextView>(R.id.durationText)
+        val statusIcon = card.findViewById<ImageView>(R.id.statusIcon)
+
+        // Set task description
+        taskDescription.text = task.taskDescription
+
+        // Set time
+        val dateFormat = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+        timeText.text = dateFormat.format(java.util.Date(task.startTime))
+
+        // Set steps count
+        stepsText.text = "${task.steps.size} 步"
+
+        // Set duration (use the duration property which handles null endTime correctly)
+        val duration = task.duration
+        val seconds = duration / 1000
+        durationText.text = if (seconds < 60) "${seconds}秒" else "${seconds / 60}分${seconds % 60}秒"
+
+        // Set status icon
+        val statusColor = if (task.success) R.color.status_running else R.color.status_failed
+        statusIcon.setColorFilter(getColor(statusColor))
+
+        // Make card clickable to open history detail
+        card.setOnClickListener {
+            val intent = Intent(this, com.kevinluo.autoglm.history.HistoryDetailActivity::class.java).apply {
+                putExtra("task_id", task.id)
+            }
+            startActivity(intent)
+        }
+
+        // Also allow long click to fill task input
+        card.setOnLongClickListener {
+            taskInput.setText(task.taskDescription)
+            updateTaskButtonStates()
+            true
+        }
+
+        return card
+    }
+
+    /**
+     * Loads and displays demo suggestions.
+     */
+    private fun loadDemoSuggestions() {
+        val demos = listOf(
+            "打开wifi",
+            "打开哔哩哔哩，并播放毛不易的消愁",
+            "打开高德地图并导航到附近加油站",
+            "打开相机拍照",
+            "打开图库，播放topgun视频"
+        )
+
+        demoSuggestionsList.removeAllViews()
+
+        demos.forEach { demo ->
+            val card = createDemoItemView(demo)
+            demoSuggestionsList.addView(card)
+        }
+    }
+
+    /**
+     * Creates a view for a demo suggestion item.
+     */
+    private fun createDemoItemView(demo: String): View {
+        val dp12 = (12 * resources.displayMetrics.density).toInt()
+        val dp20 = (20 * resources.displayMetrics.density).toInt()
+        val dp16 = (16 * resources.displayMetrics.density).toInt()
+        val dp24 = (24 * resources.displayMetrics.density).toInt()
+
+        // Get selectableItemBackground drawable using TypedValue
+        val typedValue = android.util.TypedValue()
+        theme.resolveAttribute(android.R.attr.selectableItemBackground, typedValue, true)
+        val selectableBackground = getDrawable(typedValue.resourceId)
+
+        val card = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp12
+            }
+            background = getDrawable(R.color.card_background)
+            isClickable = true
+            isFocusable = true
+            foreground = selectableBackground
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp20, dp16, dp20, dp16)
+        }
+
+        val textView = TextView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+            text = demo
+            textSize = 16f
+            setTextColor(getColor(R.color.text_primary))
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
+        val iconView = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                dp24,
+                dp24
+            ).apply {
+                marginStart = dp12
+            }
+            setImageResource(R.drawable.ic_chevron_right)
+            setColorFilter(getColor(R.color.icon_secondary))
+        }
+
+        layout.addView(textView)
+        layout.addView(iconView)
+        card.addView(layout)
+
+        card.setOnClickListener {
+            taskInput.setText(demo)
+            updateTaskButtonStates()
+            // Scroll to task input
+            findViewById<androidx.core.widget.NestedScrollView>(R.id.main_scroll_view)?.post {
+                findViewById<androidx.core.widget.NestedScrollView>(R.id.main_scroll_view)?.smoothScrollTo(0, taskInput.top)
+            }
+        }
+
+        return card
     }
 
     // endregion

@@ -39,33 +39,33 @@ import java.util.Locale
  *
  */
 class HistoryManager private constructor(private val context: Context) {
-    
+
     /** Directory for storing task history files. */
     private val historyDir: File by lazy {
         File(context.filesDir, HISTORY_DIR).also { it.mkdirs() }
     }
-    
+
     /** Currently recording task, null if no task is being recorded. */
     private var currentTask: TaskHistory? = null
-    
+
     /** Base64-encoded screenshot data for the current step. */
     private var currentScreenshotBase64: String? = null
-    
+
     /** Width of the current screenshot in pixels. */
     private var currentScreenshotWidth: Int = 0
-    
+
     /** Height of the current screenshot in pixels. */
     private var currentScreenshotHeight: Int = 0
-    
+
     private val _historyList = MutableStateFlow<List<TaskHistory>>(emptyList())
-    
+
     /** Observable list of all task histories, sorted by most recent first. */
     val historyList: StateFlow<List<TaskHistory>> = _historyList.asStateFlow()
-    
+
     init {
         loadHistoryIndex()
     }
-    
+
     /**
      * Starts recording a new task.
      *
@@ -82,7 +82,7 @@ class HistoryManager private constructor(private val context: Context) {
         Logger.d(TAG, "Started recording task: ${task.id}")
         return task
     }
-    
+
     /**
      * Sets the current screenshot for the next step.
      *
@@ -124,19 +124,19 @@ class HistoryManager private constructor(private val context: Context) {
         message: String? = null
     ) = withContext(Dispatchers.IO) {
         val task = currentTask ?: return@withContext
-        
+
         var screenshotPath: String? = null
         var annotatedPath: String? = null
-        
+
         // Save screenshot if available
         currentScreenshotBase64?.let { base64 ->
             try {
                 // Decode base64 to raw bytes (already WebP format)
                 val webpBytes = Base64.decode(base64, Base64.DEFAULT)
-                
+
                 // Save original screenshot directly without re-compression
                 screenshotPath = saveScreenshotBytes(task.id, stepNumber, webpBytes, false)
-                
+
                 // Create and save annotated screenshot if action has visual annotation
                 if (action != null) {
                     val annotation = ScreenshotAnnotator.createAnnotation(
@@ -164,7 +164,7 @@ class HistoryManager private constructor(private val context: Context) {
                 Logger.e(TAG, "Failed to save screenshot for step $stepNumber", e)
             }
         }
-        
+
         val step = HistoryStep(
             stepNumber = stepNumber,
             thinking = thinking,
@@ -175,14 +175,14 @@ class HistoryManager private constructor(private val context: Context) {
             success = success,
             message = message
         )
-        
+
         task.steps.add(step)
         Logger.d(TAG, "Recorded step $stepNumber for task ${task.id}")
-        
+
         // Clear current screenshot
         currentScreenshotBase64 = null
     }
-    
+
     /**
      * Completes the current task recording.
      *
@@ -195,39 +195,59 @@ class HistoryManager private constructor(private val context: Context) {
      *
      */
     suspend fun completeTask(success: Boolean, message: String?) = withContext(Dispatchers.IO) {
-        val task = currentTask ?: return@withContext
-        
+        val task = currentTask ?: run {
+            Logger.w(TAG, "completeTask called but no current task")
+            return@withContext
+        }
+
         // Don't save empty tasks (no steps recorded)
         if (task.steps.isEmpty()) {
-            Logger.d(TAG, "Skipping empty task ${task.id}")
+            Logger.d(TAG, "Skipping empty task ${task.id} (no steps recorded)")
             currentTask = null
             return@withContext
         }
-        
+
         task.endTime = System.currentTimeMillis()
         task.success = success
         task.completionMessage = message
-        
+
+        Logger.i(TAG, "Completing task ${task.id}: success=$success, steps=${task.steps.size}, message=$message")
+
         // Save task to disk
-        saveTask(task)
-        
+        try {
+            saveTask(task)
+            Logger.i(TAG, "Task ${task.id} saved successfully")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to save task ${task.id}", e)
+            // Continue even if save fails - we'll try to save index
+        }
+
         // Update history list
         val updatedList = _historyList.value.toMutableList()
+        // Remove if already exists (shouldn't happen, but just in case)
+        updatedList.removeAll { it.id == task.id }
         updatedList.add(0, task)
-        
+
         // Trim old history if needed
         while (updatedList.size > MAX_HISTORY_COUNT) {
             val removed = updatedList.removeAt(updatedList.size - 1)
             deleteTaskFiles(removed.id)
         }
-        
+
         _historyList.value = updatedList
-        saveHistoryIndex()
-        
-        Logger.d(TAG, "Completed task ${task.id}, success=$success")
+
+        // Save history index
+        try {
+            saveHistoryIndex()
+            Logger.i(TAG, "History index saved successfully")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to save history index", e)
+        }
+
+        Logger.i(TAG, "Completed task ${task.id}, success=$success, total history=${updatedList.size}")
         currentTask = null
     }
-    
+
     /**
      * Gets a task history by ID.
      *
@@ -240,7 +260,7 @@ class HistoryManager private constructor(private val context: Context) {
     suspend fun getTask(taskId: String): TaskHistory? = withContext(Dispatchers.IO) {
         loadTask(taskId)
     }
-    
+
     /**
      * Deletes a task history.
      *
@@ -254,7 +274,7 @@ class HistoryManager private constructor(private val context: Context) {
         _historyList.value = _historyList.value.filter { it.id != taskId }
         saveHistoryIndex()
     }
-    
+
     /**
      * Deletes multiple task histories.
      *
@@ -270,7 +290,7 @@ class HistoryManager private constructor(private val context: Context) {
         _historyList.value = _historyList.value.filter { it.id !in taskIds }
         saveHistoryIndex()
     }
-    
+
     /**
      * Clears all history.
      *
@@ -282,7 +302,7 @@ class HistoryManager private constructor(private val context: Context) {
         _historyList.value = emptyList()
         saveHistoryIndex()
     }
-    
+
     /**
      * Gets the screenshot bitmap for a step.
      *
@@ -298,9 +318,9 @@ class HistoryManager private constructor(private val context: Context) {
         if (!file.exists()) return null
         return BitmapFactory.decodeFile(path)
     }
-    
+
     // Private helper methods
-    
+
     /**
      * Saves raw WebP bytes directly to file (no re-compression).
      *
@@ -319,14 +339,14 @@ class HistoryManager private constructor(private val context: Context) {
         val taskDir = File(historyDir, taskId).also { it.mkdirs() }
         val suffix = if (annotated) "_annotated" else ""
         val file = File(taskDir, "step_${stepNumber}${suffix}.webp")
-        
+
         FileOutputStream(file).use { out ->
             out.write(webpBytes)
         }
-        
+
         return file.absolutePath
     }
-    
+
     /**
      * Saves bitmap as WebP (used for annotated screenshots).
      *
@@ -345,7 +365,7 @@ class HistoryManager private constructor(private val context: Context) {
         val taskDir = File(historyDir, taskId).also { it.mkdirs() }
         val suffix = if (annotated) "_annotated" else ""
         val file = File(taskDir, "step_${stepNumber}${suffix}.webp")
-        
+
         FileOutputStream(file).use { out ->
             @Suppress("DEPRECATION")
             val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -355,10 +375,10 @@ class HistoryManager private constructor(private val context: Context) {
             }
             bitmap.compress(format, 85, out)
         }
-        
+
         return file.absolutePath
     }
-    
+
     /**
      * Decodes a Base64 string to a Bitmap.
      *
@@ -374,43 +394,56 @@ class HistoryManager private constructor(private val context: Context) {
             null
         }
     }
-    
+
     /**
      * Saves a task's metadata to JSON file.
      *
      * @param task Task history to save
      */
     private fun saveTask(task: TaskHistory) {
-        val taskDir = File(historyDir, task.id).also { it.mkdirs() }
-        val metaFile = File(taskDir, "meta.json")
-        
-        val json = JSONObject().apply {
-            put("id", task.id)
-            put("taskDescription", task.taskDescription)
-            put("startTime", task.startTime)
-            put("endTime", task.endTime)
-            put("success", task.success)
-            put("completionMessage", task.completionMessage)
-            
-            val stepsArray = JSONArray()
-            task.steps.forEach { step ->
-                stepsArray.put(JSONObject().apply {
-                    put("stepNumber", step.stepNumber)
-                    put("timestamp", step.timestamp)
-                    put("thinking", step.thinking)
-                    put("actionDescription", step.actionDescription)
-                    put("screenshotPath", step.screenshotPath)
-                    put("annotatedScreenshotPath", step.annotatedScreenshotPath)
-                    put("success", step.success)
-                    put("message", step.message)
-                })
+        try {
+            val taskDir = File(historyDir, task.id).also { it.mkdirs() }
+            val metaFile = File(taskDir, "meta.json")
+
+            val json = JSONObject().apply {
+                put("id", task.id)
+                put("taskDescription", task.taskDescription)
+                put("startTime", task.startTime)
+                put("endTime", task.endTime)
+                put("success", task.success)
+                if (task.completionMessage != null) {
+                    put("completionMessage", task.completionMessage)
+                }
+
+                val stepsArray = JSONArray()
+                task.steps.forEach { step ->
+                    stepsArray.put(JSONObject().apply {
+                        put("stepNumber", step.stepNumber)
+                        put("timestamp", step.timestamp)
+                        put("thinking", step.thinking)
+                        put("actionDescription", step.actionDescription)
+                        if (step.screenshotPath != null) {
+                            put("screenshotPath", step.screenshotPath)
+                        }
+                        if (step.annotatedScreenshotPath != null) {
+                            put("annotatedScreenshotPath", step.annotatedScreenshotPath)
+                        }
+                        put("success", step.success)
+                        if (step.message != null) {
+                            put("message", step.message)
+                        }
+                    })
+                }
+                put("steps", stepsArray)
             }
-            put("steps", stepsArray)
+
+            metaFile.writeText(json.toString(2))
+            Logger.i(TAG, "Saved task ${task.id} to ${metaFile.absolutePath}, steps=${task.steps.size}")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to save task ${task.id}", e)
         }
-        
-        metaFile.writeText(json.toString(2))
     }
-    
+
     /**
      * Loads a task from its JSON metadata file.
      *
@@ -420,11 +453,11 @@ class HistoryManager private constructor(private val context: Context) {
     private fun loadTask(taskId: String): TaskHistory? {
         val metaFile = File(historyDir, "$taskId/meta.json")
         if (!metaFile.exists()) return null
-        
+
         return try {
             val json = JSONObject(metaFile.readText())
             val steps = mutableListOf<HistoryStep>()
-            
+
             val stepsArray = json.optJSONArray("steps")
             if (stepsArray != null) {
                 for (i in 0 until stepsArray.length()) {
@@ -443,7 +476,7 @@ class HistoryManager private constructor(private val context: Context) {
                     ))
                 }
             }
-            
+
             TaskHistory(
                 id = json.getString("id"),
                 taskDescription = json.getString("taskDescription"),
@@ -458,7 +491,7 @@ class HistoryManager private constructor(private val context: Context) {
             null
         }
     }
-    
+
     /**
      * Deletes all files associated with a task.
      *
@@ -467,7 +500,7 @@ class HistoryManager private constructor(private val context: Context) {
     private fun deleteTaskFiles(taskId: String) {
         File(historyDir, taskId).deleteRecursively()
     }
-    
+
     /**
      * Loads the history index from persistent storage.
      *
@@ -475,44 +508,58 @@ class HistoryManager private constructor(private val context: Context) {
      */
     private fun loadHistoryIndex() {
         val indexFile = File(historyDir, INDEX_FILE)
-        if (!indexFile.exists()) return
-        
+        if (!indexFile.exists()) {
+            Logger.d(TAG, "History index file does not exist, starting with empty history")
+            return
+        }
+
         try {
             val json = JSONArray(indexFile.readText())
             val list = mutableListOf<TaskHistory>()
-            
+
             for (i in 0 until json.length()) {
                 val taskId = json.getString(i)
-                loadTask(taskId)?.let { list.add(it) }
+                val task = loadTask(taskId)
+                if (task != null) {
+                    list.add(task)
+                } else {
+                    Logger.w(TAG, "Failed to load task $taskId from index, skipping")
+                }
             }
-            
+
             _historyList.value = list
+            Logger.i(TAG, "Loaded ${list.size} tasks from history index")
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to load history index", e)
         }
     }
-    
+
     /**
      * Saves the history index to persistent storage.
      *
      * Writes the list of task IDs to the index file for quick loading on startup.
      */
     private fun saveHistoryIndex() {
-        val indexFile = File(historyDir, INDEX_FILE)
-        val json = JSONArray()
-        _historyList.value.forEach { json.put(it.id) }
-        indexFile.writeText(json.toString())
+        try {
+            val indexFile = File(historyDir, INDEX_FILE)
+            val json = JSONArray()
+            _historyList.value.forEach { json.put(it.id) }
+            indexFile.writeText(json.toString())
+            Logger.d(TAG, "Saved history index with ${_historyList.value.size} tasks")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to save history index", e)
+        }
     }
-    
+
     companion object {
         private const val TAG = "HistoryManager"
         private const val HISTORY_DIR = "task_history"
         private const val INDEX_FILE = "history_index.json"
         private const val MAX_HISTORY_COUNT = 50
-        
+
         @Volatile
         private var instance: HistoryManager? = null
-        
+
         /**
          * Gets the singleton instance of HistoryManager.
          *

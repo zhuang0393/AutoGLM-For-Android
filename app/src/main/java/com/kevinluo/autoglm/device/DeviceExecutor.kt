@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
  *
  */
 class DeviceExecutor(private val userService: IUserService) {
-    
+
     /**
      * Performs a tap at the specified absolute coordinates.
      *
@@ -61,7 +61,7 @@ class DeviceExecutor(private val userService: IUserService) {
         "$result1\n$result2"
     }
 
-    
+
     /**
      * Performs a long press at the specified absolute coordinates.
      *
@@ -212,7 +212,7 @@ class DeviceExecutor(private val userService: IUserService) {
 
         return null
     }
-    
+
     /**
      * Presses a key by its keycode.
      *
@@ -319,6 +319,20 @@ class DeviceExecutor(private val userService: IUserService) {
             Logger.e(TAG, "Error executing command: $command", e)
             "Error executing command: ${e.message}"
         }
+    }
+
+    /**
+     * Executes a shell command through the UserService (public version).
+     *
+     * This method allows external classes to execute arbitrary shell commands
+     * through the DeviceExecutor, which is useful for operations that don't
+     * have dedicated methods.
+     *
+     * @param command The shell command to execute
+     * @return The command output, or an error message if execution fails
+     */
+    suspend fun executeShellCommand(command: String): String = withContext(Dispatchers.IO) {
+        executeCommand(command)
     }
 
     /**

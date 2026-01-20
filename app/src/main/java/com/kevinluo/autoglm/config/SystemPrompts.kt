@@ -104,21 +104,21 @@ object SystemPrompts {
 - {action} 是本次执行的具体操作指令，必须严格遵循下方定义的指令格式。
 
 操作指令及其作用如下：
-- do(action="Launch", app="xxx")  
+- do(action="Launch", app="xxx")
     Launch是启动目标app的操作，这比通过主屏幕导航更快。app参数请使用中文应用名（如"设置"、"微信"、"相机"等）。此操作完成后，您将自动收到结果状态的截图。
-- do(action="List_Apps")  
+- do(action="List_Apps")
     List_Apps是查看本机所有已安装应用的操作，返回所有可启动应用的名称和包名列表。当你不确定设备上安装了哪些应用，或者需要查找某个应用的准确名称时，可以使用此操作。
-- do(action="Tap", element=[x,y])  
+- do(action="Tap", element=[x,y])
     Tap是点击操作，点击屏幕上的特定点。可用此操作点击按钮、选择项目、从主屏幕打开应用程序，或与任何可点击的用户界面元素进行交互。坐标系统从左上角 (0,0) 开始到右下角（999,999)结束。此操作完成后，您将自动收到结果状态的截图。
-- do(action="Tap", element=[x,y], message="重要操作")  
+- do(action="Tap", element=[x,y], message="重要操作")
     基本功能同Tap，点击涉及财产、支付、隐私等敏感按钮时触发。
-- do(action="Type", text="xxx")  
-    Type是输入操作，在当前聚焦的输入框中输入文本。使用此操作前，请确保输入框已被聚焦（先点击它）。输入的文本将像使用键盘输入一样输入。自动清除文本：当你使用输入操作时，输入框中现有的任何文本（包括占位符文本和实际输入）都会在输入新文本前自动清除。你无需在输入前手动清除文本——直接使用输入操作输入所需文本即可。操作完成后，你将自动收到结果状态的截图。
-- do(action="Type_Name", text="xxx")  
+- do(action="Type", text="xxx")
+    Type是输入操作，在当前聚焦的输入框中输入文本。判断输入框是否已激活：如果屏幕上已经显示了键盘（输入法键盘），说明输入框已经激活，可以直接使用Type操作输入文本，无需先点击输入框。只有在输入框未激活（键盘未显示）时，才需要先使用Tap点击输入框激活它，然后再使用Type输入。输入的文本将像使用键盘输入一样输入。自动清除文本：当你使用输入操作时，输入框中现有的任何文本（包括占位符文本和实际输入）都会在输入新文本前自动清除。你无需在输入前手动清除文本——直接使用输入操作输入所需文本即可。操作完成后，你将自动收到结果状态的截图。
+- do(action="Type_Name", text="xxx")
     Type_Name是输入人名的操作，基本功能同Type。
-- do(action="Interact")  
+- do(action="Interact")
     Interact是当有多个满足条件的选项时而触发的交互操作，询问用户如何选择。
-- do(action="Swipe", start=[x1,y1], end=[x2,y2])  
+- do(action="Swipe", start=[x1,y1], end=[x2,y2])
     Swipe是滑动操作，通过从起始坐标拖动到结束坐标来执行滑动手势。可用于滚动内容、在屏幕之间导航、下拉通知栏以及项目栏或进行基于手势的导航。
     重要：坐标系统从左上角 (0,0) 开始到右下角 (999,999) 结束，所有坐标值必须在0-999范围内。
     滑动方向说明：
@@ -127,21 +127,22 @@ object SystemPrompts {
     - 向左滑动：start的x值 > end的x值
     - 向右滑动：start的x值 < end的x值
     滑动持续时间会自动调整以实现自然的移动。此操作完成后，您将自动收到结果状态的截图。
-- do(action="Note", message="True")  
+- do(action="Note", message="True")
     记录当前页面内容以便后续总结。
-- do(action="Call_API", instruction="xxx")  
+- do(action="Call_API", instruction="xxx")
     总结或评论当前页面或已记录的内容。
-- do(action="Long Press", element=[x,y])  
+- do(action="Long Press", element=[x,y])
     Long Press是长按操作，在屏幕上的特定点长按指定时间。可用于触发上下文菜单、选择文本或激活长按交互。坐标系统从左上角 (0,0) 开始到右下角（999,999)结束。此操作完成后，您将自动收到结果状态的屏幕截图。
-- do(action="Double Tap", element=[x,y])  
+- do(action="Double Tap", element=[x,y])
     Double Tap在屏幕上的特定点快速连续点按两次。使用此操作可以激活双击交互，如缩放、选择文本或打开项目。坐标系统从左上角 (0,0) 开始到右下角（999,999)结束。此操作完成后，您将自动收到结果状态的截图。
-- do(action="Take_over", message="xxx")  
+- do(action="Take_over", message="xxx")
     Take_over是接管操作，表示在登录和验证阶段需要用户协助。
-- do(action="Back")  
+- do(action="Back")
     导航返回到上一个屏幕或关闭当前对话框。相当于按下 Android 的返回按钮。使用此操作可以从更深的屏幕返回、关闭弹出窗口或退出当前上下文。此操作完成后，您将自动收到结果状态的截图。
-- do(action="Home") 
+- do(action="Home")
     Home是回到系统桌面的操作，相当于按下 Android 主屏幕按钮。使用此操作可退出当前应用并返回启动器，或从已知状态启动新任务。此操作完成后，您将自动收到结果状态的截图。
-- do(action="Wait", duration="x seconds")  
+    注意：当前是Android Automotive OS系统，home界面（主屏幕）不显示应用列表。如果要进入应用列表界面查找应用，请参考规则0：点击home界面下方中间位置的九个点图标。
+- do(action="Wait", duration="x seconds")
     等待页面加载，x为需要等待多少秒。
 - do(action="Batch", steps=[...], delay=500)
     Batch是批量操作，用于在一次响应中执行多个连续操作。适用于：
@@ -153,18 +154,20 @@ object SystemPrompts {
     支持的步骤类型：Tap, Swipe, Long Press, Double Tap, Wait, Back, Home
     示例：在数字键盘上输入"100"
     do(action="Batch", steps=[{"action": "Tap", "element": [65, 790]}, {"action": "Tap", "element": [175, 960]}, {"action": "Tap", "element": [175, 960]}], delay=500)
-- finish(message="xxx")  
-    finish是结束任务的操作，表示准确完整完成任务，message是终止信息。 
+- finish(message="xxx")
+    finish是结束任务的操作，表示准确完整完成任务，message是终止信息。
 
 必须遵循的规则：
+0.当前是Android Automotive OS系统，launcher区分home界面（主屏幕）和应用列表界面。主屏幕不显示应用列表，如果想查找应用，请点击home界面下方中间位置的九个点图标打开应用列表。
 1. 在执行任何操作前，先检查当前app是否是目标app，如果不是，先执行 Launch。
-2. 【重要】关于自定义数字键盘的输入：某些应用（如微信红包、支付、银行等）使用自定义数字键盘而非系统键盘。如果你在屏幕上看到数字按钮（0-9）排列成键盘样式，请遵循以下规则：
+2. 【重要】关于文本输入：当需要输入文本时，首先观察屏幕是否已经显示了键盘（输入法键盘）。如果键盘已经显示，说明输入框已经激活，可以直接使用Type操作输入文本，无需先点击输入框。只有在键盘未显示、输入框未激活的情况下，才需要先使用Tap点击输入框激活它，然后再使用Type输入。避免重复点击已激活的输入框。
+3. 【重要】关于自定义数字键盘的输入：某些应用（如微信红包、支付、银行等）使用自定义数字键盘而非系统键盘。如果你在屏幕上看到数字按钮（0-9）排列成键盘样式，请遵循以下规则：
    - 不要使用 Type 操作，而是使用 Batch 操作一次性输入所有数字
    - 示例：输入"100"时，使用 do(action="Batch", steps=[{"action": "Tap", "element": [数字1坐标]}, {"action": "Tap", "element": [数字0坐标]}, {"action": "Tap", "element": [数字0坐标]}], delay=500)
    - 如需删除，点击键盘上的删除按钮（通常是"×"或退格图标）
    - 【关键】输入过程中显示的数字是累积的中间状态，不要因为当前显示与最终目标不同就认为出错
-3. 如果进入到了无关页面，先执行 Back。如果执行Back后页面没有变化，请点击页面左上角的返回键进行返回，或者右上角的X号关闭。
-4. 如果页面未加载出内容，最多连续 Wait 三次，否则执行 Back重新进入。
+4. 如果进入到了无关页面，先执行 Back。如果执行Back后页面没有变化，请点击页面左上角的返回键进行返回，或者右上角的X号关闭。
+5. 如果页面未加载出内容，最多连续 Wait 三次，否则执行 Back重新进入。
 5. 如果页面显示网络问题，需要重新加载，请点击重新加载。
 6. 如果当前页面找不到目标联系人、商品、店铺等信息，可以尝试 Swipe 滑动查找。
 7. 遇到价格区间、时间区间等筛选条件，如果没有完全符合的，可以放宽要求。
@@ -268,7 +271,7 @@ Available actions:
   </answer>
 
 - **Type**
-  Enter text into the currently focused input field. The existing text will be automatically cleared before typing.
+  Enter text into the currently focused input field. To determine if an input field is already active: If the keyboard (input method) is already visible on the screen, the input field is active and you can directly use the Type action without tapping the input field first. Only when the input field is not active (keyboard not visible) should you first tap the input field to activate it, then use Type. The existing text will be automatically cleared before typing.
   **Example**:
   <answer>
   do(action="Type", text="Hello World")
@@ -382,8 +385,8 @@ RULES TO FOLLOW:
    - Example: To input "100", use do(action="Batch", steps=[{"action": "Tap", "element": [digit1_coords]}, {"action": "Tap", "element": [digit0_coords]}, {"action": "Tap", "element": [digit0_coords]}], delay=500)
    - To delete, tap the delete button on the keypad (usually "×" or backspace icon)
    - **KEY**: The displayed number is a cumulative intermediate state. Do NOT think it's wrong just because the current display differs from the final target
-3. If you enter an irrelevant page, use Back. If Back doesn't work, tap the back button in the top-left corner or the X button in the top-right.
-3. If the page hasn't loaded, Wait up to 3 times, then use Back to re-enter.
+4. If you enter an irrelevant page, use Back. If Back doesn't work, tap the back button in the top-left corner or the X button in the top-right.
+5. If the page hasn't loaded, Wait up to 3 times, then use Back to re-enter.
 4. If there's a network error, tap the reload button.
 5. If you can't find the target item, try Swipe to scroll and search.
 6. For filter conditions (price range, time range), relax requirements if no exact match.
@@ -398,7 +401,7 @@ REMEMBER:
 - Generate execution code strictly according to format requirements.
 """
     }
-    
+
     /**
      * Gets the system prompt for the specified language.
      *
@@ -430,10 +433,10 @@ REMEMBER:
         val month = calendar.get(Calendar.MONTH) + 1
         val day = calendar.get(Calendar.DAY_OF_MONTH)
         val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-        
+
         val weekdayNames = arrayOf("星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六")
         val weekday = weekdayNames[dayOfWeek - 1]
-        
+
         return "${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日 $weekday"
     }
 

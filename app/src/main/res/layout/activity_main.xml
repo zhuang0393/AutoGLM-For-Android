@@ -24,7 +24,7 @@
             android:layout_weight="1"
             android:text="@string/app_name"
             android:textColor="@color/text_primary"
-            android:textSize="20sp"
+            android:textSize="24sp"
             android:fontFamily="sans-serif-medium" />
 
         <ImageButton
@@ -48,6 +48,7 @@
     </LinearLayout>
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/main_scroll_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false">
@@ -56,8 +57,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingBottom="32dp">
+            android:paddingHorizontal="24dp"
+            android:paddingBottom="40dp">
 
             <!-- Shizuku Status Card -->
             <FrameLayout
@@ -101,7 +102,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="@string/shizuku_status_title"
                                 android:textColor="@color/text_primary"
-                                android:textSize="16sp" />
+                                android:textSize="20sp" />
 
                             <TextView
                                 android:id="@+id/statusText"
@@ -110,7 +111,7 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/shizuku_status_unknown"
                                 android:textColor="@color/text_secondary"
-                                android:textSize="14sp" />
+                                android:textSize="18sp" />
 
                         </LinearLayout>
 
@@ -162,279 +163,18 @@
 
             </FrameLayout>
 
-            <!-- Overlay Permission Card -->
-            <FrameLayout
-                android:id="@+id/overlayPermissionCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@color/card_background">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- Status Icon -->
-                        <ImageView
-                            android:id="@+id/overlayStatusIcon"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:src="@drawable/ic_layers"
-                            android:tint="@color/icon_primary"
-                            android:contentDescription="Overlay" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/overlay_permission_title"
-                                android:textColor="@color/text_primary"
-                                android:textSize="16sp" />
-
-                            <TextView
-                                android:id="@+id/overlayStatusText"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/overlay_permission_denied"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="14sp" />
-
-                        </LinearLayout>
-
-                    </LinearLayout>
-
-                    <!-- Request Overlay Permission Button -->
-                    <Button
-                        android:id="@+id/requestOverlayBtn"
-                        style="@style/Widget.App.Button.Tonal.Large"
-                        android:layout_width="wrap_content"
-                        android:layout_height="52dp"
-                        android:layout_marginTop="12dp"
-                        android:text="@string/request_overlay_permission"
-                        android:drawableStart="@drawable/ic_layers"
-                        android:drawablePadding="8dp"
-                        android:gravity="center_vertical|start" />
-
-                </LinearLayout>
-
-            </FrameLayout>
-
-            <!-- Keyboard Status Card -->
-            <FrameLayout
-                android:id="@+id/keyboardCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@color/card_background">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- Status Icon -->
-                        <ImageView
-                            android:id="@+id/keyboardStatusIcon"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:src="@drawable/ic_keyboard"
-                            android:tint="@color/icon_primary"
-                            android:contentDescription="Keyboard" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/keyboard_title"
-                                android:textColor="@color/text_primary"
-                                android:textSize="16sp" />
-
-                            <TextView
-                                android:id="@+id/keyboardStatusText"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/keyboard_not_enabled"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="14sp" />
-
-                        </LinearLayout>
-
-                    </LinearLayout>
-
-                    <!-- Enable Button inside card -->
-                    <Button
-                        android:id="@+id/enableKeyboardBtn"
-                        style="@style/Widget.App.Button.Tonal.Large"
-                        android:layout_width="wrap_content"
-                        android:layout_height="52dp"
-                        android:layout_marginTop="12dp"
-                        android:text="@string/enable_keyboard"
-                        android:drawableStart="@drawable/ic_keyboard"
-                        android:drawablePadding="8dp"
-                        android:gravity="center_vertical|start" />
-
-                </LinearLayout>
-
-            </FrameLayout>
-
-            <!-- Battery Optimization Card -->
-            <FrameLayout
-                android:id="@+id/batteryOptCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@color/card_background">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- Status Icon -->
-                        <ImageView
-                            android:id="@+id/batteryStatusIcon"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:src="@drawable/ic_battery"
-                            android:tint="@color/icon_primary"
-                            android:contentDescription="Battery" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/battery_opt_title"
-                                android:textColor="@color/text_primary"
-                                android:textSize="16sp" />
-
-                            <TextView
-                                android:id="@+id/batteryStatusText"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/battery_opt_not_ignored"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="14sp" />
-
-                        </LinearLayout>
-
-                    </LinearLayout>
-
-                    <!-- Request Button inside card -->
-                    <Button
-                        android:id="@+id/requestBatteryOptBtn"
-                        style="@style/Widget.App.Button.Tonal.Large"
-                        android:layout_width="wrap_content"
-                        android:layout_height="52dp"
-                        android:layout_marginTop="12dp"
-                        android:text="@string/battery_opt_request"
-                        android:drawableStart="@drawable/ic_battery"
-                        android:drawablePadding="8dp"
-                        android:gravity="center_vertical|start" />
-
-                </LinearLayout>
-
-            </FrameLayout>
-
-            <!-- History Card -->
-            <FrameLayout
-                android:id="@+id/historyBtn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?android:attr/selectableItemBackground"
-                android:background="@color/card_background">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@drawable/ic_history"
-                        android:tint="@color/icon_primary"
-                        android:contentDescription="@string/history_title" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
-                        android:layout_weight="1"
-                        android:text="@string/quick_action_history"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp" />
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_chevron_right"
-                        android:tint="@color/icon_secondary"
-                        android:contentDescription="@string/history_title" />
-
-                </LinearLayout>
-
-            </FrameLayout>
-
             <!-- Task Input Card -->
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="16dp"
                 android:background="@color/card_background">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="20dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -443,8 +183,8 @@
                         android:orientation="horizontal">
 
                         <ImageView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
                             android:src="@drawable/ic_edit"
                             android:tint="@color/icon_primary"
                             android:contentDescription="Task" />
@@ -452,16 +192,16 @@
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
+                            android:layout_marginStart="20dp"
                             android:layout_weight="1"
                             android:text="@string/task_section_label"
                             android:textColor="@color/text_primary"
-                            android:textSize="16sp" />
+                            android:textSize="22sp" />
 
                         <ImageButton
                             android:id="@+id/btnVoiceInput"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
                             android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/voice_input_title"
                             android:src="@drawable/ic_mic"
@@ -469,8 +209,8 @@
 
                         <ImageButton
                             android:id="@+id/btnSelectTemplate"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
                             android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/task_select_template"
                             android:src="@drawable/ic_list"
@@ -484,8 +224,8 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
                         android:background="@color/surface_variant"
-                        android:padding="12dp"
-                        android:layout_marginTop="16dp">
+                        android:padding="16dp"
+                        android:layout_marginTop="20dp">
 
                         <EditText
                             android:id="@+id/taskInput"
@@ -493,10 +233,11 @@
                             android:layout_height="wrap_content"
                             android:gravity="top|start"
                             android:inputType="textMultiLine"
-                            android:maxLines="5"
-                            android:minLines="3"
+                            android:maxLines="6"
+                            android:minLines="4"
                             android:textColor="@color/text_primary"
-                            android:textSize="15sp" />
+                            android:textSize="22sp"
+                            android:lineSpacingExtra="5dp" />
 
                     </LinearLayout>
 
@@ -505,12 +246,14 @@
                         android:id="@+id/startTaskBtn"
                         style="@style/Widget.App.Button.Tonal.Large"
                         android:layout_width="wrap_content"
-                        android:layout_height="52dp"
-                        android:layout_marginTop="12dp"
+                        android:layout_height="64dp"
+                        android:layout_marginTop="20dp"
                         android:enabled="false"
                         android:text="@string/start_task"
+                        android:textSize="22sp"
                         android:drawableStart="@drawable/ic_play"
-                        android:drawablePadding="8dp"
+                        android:drawablePadding="12dp"
+                        android:paddingHorizontal="32dp"
                         android:gravity="center_vertical|start" />
 
                 </LinearLayout>
@@ -591,12 +334,65 @@
                     android:id="@+id/cancelTaskBtn"
                     style="@style/Widget.App.Button.Tonal.Large"
                     android:layout_width="wrap_content"
-                    android:layout_height="52dp"
-                    android:enabled="false"
-                    android:text="@string/cancel_task"
-                    android:drawableStart="@drawable/ic_stop"
-                    android:drawablePadding="8dp"
-                    android:gravity="center_vertical|start" />
+                    android:layout_height="64dp"
+                        android:enabled="false"
+                        android:text="@string/cancel_task"
+                        android:textSize="22sp"
+                        android:drawableStart="@drawable/ic_stop"
+                        android:drawablePadding="12dp"
+                        android:paddingHorizontal="32dp"
+                        android:gravity="center_vertical|start" />
+
+            </LinearLayout>
+
+            <!-- Recent History Section -->
+            <LinearLayout
+                android:id="@+id/recentHistorySection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:text="最近任务"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <LinearLayout
+                    android:id="@+id/recentHistoryList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+            <!-- Demo Suggestions Section -->
+            <LinearLayout
+                android:id="@+id/demoSuggestionsSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:text="示例任务"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <LinearLayout
+                    android:id="@+id/demoSuggestionsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
 
             </LinearLayout>
 

@@ -175,18 +175,18 @@ class SystemService(private val context: Context) : IUserService.Stub() {
                 resolver,
                 android.provider.Settings.Secure.ENABLED_INPUT_METHODS
             ) ?: ""
-            
+
             if (enabledImes.contains(id)) {
                 return "Already enabled: $id\n[exit code: 0]"
             }
-            
+
             val newEnabledImes = if (enabledImes.isEmpty()) id else "$enabledImes:$id"
             val success = android.provider.Settings.Secure.putString(
                 resolver,
                 android.provider.Settings.Secure.ENABLED_INPUT_METHODS,
                 newEnabledImes
             )
-            
+
             if (success) "Input method enabled: $id\n[exit code: 0]" else "Failed to enable input method\n[exit code: 1]"
         } catch (e: Exception) {
             "Error: ${e.message}\n[exit code: 1]"
@@ -216,7 +216,7 @@ class SystemService(private val context: Context) : IUserService.Stub() {
     private fun executeGetDefaultIme(): String {
         return try {
             val id = android.provider.Settings.Secure.getString(
-                context.contentResolver, 
+                context.contentResolver,
                 android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
             ) ?: ""
             "$id\n[exit code: 0]"
@@ -227,15 +227,119 @@ class SystemService(private val context: Context) : IUserService.Stub() {
 
     /**
      * Executes am broadcast command.
+     *
+     * Supports format: am broadcast -a ACTION -p PACKAGE [--es key 'value'] [--receiver-include-background]
+     *
+     * Handles quoted values correctly, including values with spaces and escaped quotes.
      */
     private fun executeAmBroadcast(command: String): String {
         return try {
-            // Parse broadcast intent
-            val intentStr = command.substringAfter("am broadcast ").trim()
-            val intent = Intent.parseUri(intentStr, Intent.URI_INTENT_SCHEME)
+            val argsStr = command.substringAfter("am broadcast ").trim()
+            val intent = Intent()
+            var packageName: String? = null
+
+            // Parse arguments manually to handle quoted strings correctly
+            var i = 0
+            val args = mutableListOf<String>()
+            var currentArg = StringBuilder()
+            var inQuotes = false
+            var quoteChar: Char? = null
+
+            while (i < argsStr.length) {
+                val char = argsStr[i]
+                when {
+                    !inQuotes && (char == '\'' || char == '"') -> {
+                        inQuotes = true
+                        quoteChar = char
+                        i++
+                    }
+                    inQuotes && char == quoteChar -> {
+                        // Check for escaped quote
+                        if (i + 1 < argsStr.length && argsStr[i + 1] == quoteChar) {
+                            currentArg.append(char)
+                            i += 2
+                        } else {
+                            inQuotes = false
+                            quoteChar = null
+                            i++
+                        }
+                    }
+                    !inQuotes && char.isWhitespace() -> {
+                        if (currentArg.isNotEmpty()) {
+                            args.add(currentArg.toString())
+                            currentArg.clear()
+                        }
+                        i++
+                    }
+                    else -> {
+                        currentArg.append(char)
+                        i++
+                    }
+                }
+            }
+            if (currentArg.isNotEmpty()) {
+                args.add(currentArg.toString())
+            }
+
+            // Parse arguments
+            i = 0
+            while (i < args.size) {
+                when (args[i]) {
+                    "-a" -> {
+                        if (i + 1 < args.size) {
+                            intent.action = args[i + 1]
+                            i += 2
+                        } else {
+                            i++
+                        }
+                    }
+                    "-p" -> {
+                        if (i + 1 < args.size) {
+                            packageName = args[i + 1]
+                            intent.setPackage(packageName)
+                            i += 2
+                        } else {
+                            i++
+                        }
+                    }
+                    "--es" -> {
+                        // String extra: --es key value
+                        if (i + 2 < args.size) {
+                            val key = args[i + 1]
+                            var value = args[i + 2]
+                            // Remove surrounding quotes if still present
+                            value = value.removeSurrounding("'", "'").removeSurrounding("\"", "\"")
+                            // Handle escaped quotes
+                            value = value.replace("'\\''", "'")
+                            intent.putExtra(key, value)
+                            Logger.d(TAG, "Added extra: $key = '${value.take(50)}${if (value.length > 50) "..." else ""}'")
+                            i += 3
+                        } else {
+                            i++
+                        }
+                    }
+                    "--receiver-include-background" -> {
+                        // Add flag for background receivers (Android 8.0+)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND)
+                        }
+                        i++
+                    }
+                    else -> {
+                        i++
+                    }
+                }
+            }
+
+            Logger.i(TAG, "Sending broadcast: action=${intent.action}, package=$packageName, hasExtras=${intent.hasExtra("msg")}")
+
+            // Send broadcast with appropriate flags
+            // FLAG_RECEIVER_INCLUDE_BACKGROUND is already set in intent flags if needed
             context.sendBroadcast(intent)
+
             "[exit code: 0]"
         } catch (e: Exception) {
+            Logger.e(TAG, "Failed to execute broadcast: $command", e)
             "Error: ${e.message}\n[exit code: 1]"
         }
     }

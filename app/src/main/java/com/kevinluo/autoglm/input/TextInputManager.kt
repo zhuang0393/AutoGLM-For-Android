@@ -36,7 +36,7 @@ class TextInputManager(private val userService: IUserService) {
 
     /** Cached original IME for restoration after text input. */
     private var originalIme: String? = null
-    
+
     /**
      * Types text into the currently focused input field.
      *
@@ -60,16 +60,20 @@ class TextInputManager(private val userService: IUserService) {
                 return@withContext switchResult
             }
 
-            // Step 2: Clear existing text
+            // Step 2: Wait a bit to ensure keyboard view is fully created and receiver is registered
+            delay(KEYBOARD_VIEW_CREATE_DELAY_MS)
+
+            // Step 3: Clear existing text
             clearText()
             delay(TEXT_CLEAR_DELAY_MS)
 
-            // Step 3: Input new text
+            // Step 4: Input new text
             // We don't check broadcast result because it's unreliable
             // The text may be input successfully even when result=0
             val result = inputTextViaB64(text)
             Logger.d(TAG, "Input broadcast result: $result")
 
+            // Wait longer to ensure text is committed
             delay(TEXT_INPUT_DELAY_MS)
 
             // Step 4: Restore original keyboard
@@ -112,11 +116,11 @@ class TextInputManager(private val userService: IUserService) {
         // Save original IME
         originalIme = currentIme
         Logger.d(TAG, "Saved original IME: $originalIme")
-        
+
         // List all enabled IMEs to debug
         val enabledImes = shell("ime list -s")
         Logger.d(TAG, "Enabled IMEs:\n$enabledImes")
-        
+
         // Get the IME ID
         val imeId = KeyboardHelper.IME_ID
         Logger.d(TAG, "AutoGLM Keyboard IME ID: $imeId")
@@ -153,7 +157,7 @@ class TextInputManager(private val userService: IUserService) {
         val newIme = getCurrentIme()
         return KeyboardHelper.isAutoGLMKeyboard(newIme)
     }
-    
+
     /**
      * Gets the current default input method.
      *
@@ -173,7 +177,8 @@ class TextInputManager(private val userService: IUserService) {
      */
     private fun clearText(): String {
         Logger.d(TAG, "Clearing text")
-        return shell("am broadcast -a $ACTION_CLEAR_TEXT -p $PACKAGE_NAME")
+        // Add FLAG_RECEIVER_INCLUDE_BACKGROUND to ensure broadcast is received
+        return shell("am broadcast -a $ACTION_CLEAR_TEXT -p $PACKAGE_NAME --receiver-include-background")
     }
 
     /**
@@ -192,7 +197,10 @@ class TextInputManager(private val userService: IUserService) {
     private fun inputTextViaB64(text: String): String {
         val encoded = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         Logger.d(TAG, "Input text via B64: '$text' -> '$encoded'")
-        return shell("am broadcast -a $ACTION_INPUT_B64 -p $PACKAGE_NAME --es msg '$encoded'")
+        // Escape single quotes in the encoded string for shell safety
+        val escapedEncoded = encoded.replace("'", "'\\''")
+        // Add --receiver-include-background flag to ensure broadcast is received
+        return shell("am broadcast -a $ACTION_INPUT_B64 -p $PACKAGE_NAME --es msg '$escapedEncoded' --receiver-include-background")
     }
 
     /**
@@ -232,7 +240,7 @@ class TextInputManager(private val userService: IUserService) {
         // Broadcast actions
         private const val ACTION_INPUT_B64 = "ADB_INPUT_B64"
         private const val ACTION_CLEAR_TEXT = "ADB_CLEAR_TEXT"
-        
+
         // Package name
         private const val PACKAGE_NAME = "com.kevinluo.autoglm"
 
@@ -241,10 +249,12 @@ class TextInputManager(private val userService: IUserService) {
         private const val KEYBOARD_SWITCH_DELAY_MS = 1000L
         // Wait after enabling keyboard before switching
         private const val IME_ENABLE_DELAY_MS = 500L
+        // Wait for keyboard view to be created and receiver to be registered
+        private const val KEYBOARD_VIEW_CREATE_DELAY_MS = 800L
         // Wait after clearing text to ensure field is empty
         private const val TEXT_CLEAR_DELAY_MS = 500L
         // Wait after inputting text to ensure it's committed
-        private const val TEXT_INPUT_DELAY_MS = 500L
+        private const val TEXT_INPUT_DELAY_MS = 800L
         // Wait after restoring keyboard before continuing
         private const val KEYBOARD_RESTORE_DELAY_MS = 500L
     }

@@ -11,17 +11,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="12dp">
 
         <!-- Step Number Badge -->
         <TextView
             android:id="@+id/step_number"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:background="@drawable/step_number_background"
             android:gravity="center"
             android:textColor="@color/on_primary"
-            android:textSize="10sp"
+            android:textSize="13sp"
             android:fontFamily="sans-serif-medium" />
 
         <LinearLayout
@@ -37,8 +37,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:lineSpacingExtra="2dp" />
+                android:textSize="15sp"
+                android:lineSpacingExtra="4dp"
+                android:maxLines="30"
+                android:ellipsize="end"
+                android:textStyle="normal" />
 
             <!-- Action -->
             <LinearLayout
@@ -60,7 +63,10 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:textColor="@color/primary"
-                    android:textSize="10sp" />
+                    android:textSize="14sp"
+                    android:maxLines="10"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium" />
             </LinearLayout>
 
         </LinearLayout>
