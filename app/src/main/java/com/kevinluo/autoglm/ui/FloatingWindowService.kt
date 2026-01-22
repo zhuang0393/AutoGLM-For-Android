@@ -24,11 +24,18 @@ import android.widget.TextView
 // import androidx.recyclerview.widget.LinearLayoutManager
 // import androidx.recyclerview.widget.RecyclerView
 import android.widget.Button
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.core.app.ActivityCompat
 import com.kevinluo.autoglm.MainActivity
 import com.kevinluo.autoglm.R
 import com.kevinluo.autoglm.action.AgentAction
 import com.kevinluo.autoglm.screenshot.FloatingWindowController
 import com.kevinluo.autoglm.util.Logger
+import com.kevinluo.autoglm.voice.VoiceError
+import com.kevinluo.autoglm.voice.VoiceInputManager
+import com.kevinluo.autoglm.voice.VoiceRecordingDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -104,6 +111,10 @@ class FloatingWindowService : Service(), FloatingWindowController {
     private var resetAgentCallback: (() -> Unit)? = null
     private var pauseTaskCallback: (() -> Unit)? = null
     private var resumeTaskCallback: (() -> Unit)? = null
+
+    // Voice input
+    private var voiceInputManager: VoiceInputManager? = null
+    private var isVoiceRecording = false
 
     // Coroutine scope for UI operations - uses SupervisorJob so child failures don't cancel siblings
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -968,6 +979,11 @@ class FloatingWindowService : Service(), FloatingWindowController {
             showTemplateSelectionPopup(it, taskInput)
         }
 
+        // Voice input button
+        floatingView?.findViewById<Button>(R.id.btn_voice_input)?.setOnClickListener {
+            onVoiceButtonClick(taskInput)
+        }
+
         startBtn?.setOnClickListener {
             val task = taskInput?.text?.toString()?.trim() ?: ""
             if (task.isNotBlank()) {
@@ -1310,5 +1326,93 @@ class FloatingWindowService : Service(), FloatingWindowController {
 
             override fun getItemCount(): Int = steps.size
         */
+    }
+
+    /**
+     * Handles voice button click in floating window.
+     */
+    private fun onVoiceButtonClick(taskInput: EditText?) {
+        // Check audio permission first
+        if (!hasAudioPermission()) {
+            // Request permission by opening MainActivity
+            val intent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra("request_audio_permission", true)
+            }
+            startActivity(intent)
+            Toast.makeText(this, getString(R.string.voice_permission_required), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Initialize voice input manager if needed
+        if (voiceInputManager == null) {
+            voiceInputManager = VoiceInputManager(this)
+        }
+
+        // Check if model is downloaded
+        if (!voiceInputManager!!.isModelReady()) {
+            Toast.makeText(this, getString(R.string.voice_model_not_downloaded), Toast.LENGTH_SHORT).show()
+            // Open MainActivity to download model
+            val intent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            return
+        }
+
+        // Start voice recording
+        startVoiceRecording(taskInput)
+    }
+
+    /**
+     * Checks if audio recording permission is granted.
+     */
+    private fun hasAudioPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Permission granted by default on older versions
+        }
+    }
+
+    /**
+     * Starts voice recording in floating window.
+     */
+    private fun startVoiceRecording(taskInput: EditText?) {
+        // 显示语音录音对话框
+        val dialog = VoiceRecordingDialog(
+            context = this,
+            voiceInputManager = voiceInputManager!!,
+            onResult = { result ->
+                if (result.text.isNotBlank()) {
+                    val currentText = taskInput?.text?.toString() ?: ""
+                    if (currentText.isBlank()) {
+                        taskInput?.setText(result.text)
+                    } else {
+                        taskInput?.setText("$currentText ${result.text}")
+                    }
+                    taskInput?.setSelection(taskInput.text?.length ?: 0)
+
+                    // 用户已在对话框内确认，直接运行任务
+                    val task = taskInput?.text?.toString()?.trim() ?: ""
+                    if (task.isNotBlank()) {
+                        startTaskCallback?.invoke(task)
+                    }
+                }
+            },
+            onError = { error ->
+                val errorMsg = when (error) {
+                    VoiceError.PermissionDenied -> getString(R.string.voice_permission_denied)
+                    VoiceError.ModelNotDownloaded -> getString(R.string.voice_model_not_downloaded)
+                    VoiceError.ModelLoadFailed -> getString(R.string.voice_model_load_failed)
+                    VoiceError.RecordingFailed -> getString(R.string.voice_recording_failed)
+                    VoiceError.RecognitionFailed -> getString(R.string.voice_recognition_failed)
+                    VoiceError.NetworkError -> getString(R.string.voice_network_error)
+                    is VoiceError.Unknown -> error.message
+                }
+                Toast.makeText(this, errorMsg, Toast.LENGTH_SHORT).show()
+            }
+        )
+        dialog.show()
     }
 }

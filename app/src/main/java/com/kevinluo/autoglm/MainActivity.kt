@@ -109,7 +109,7 @@ class MainActivity : Activity(), PhoneAgentListener {
     private var currentThinking = ""
 
     // Voice input
-    private lateinit var btnVoiceInput: ImageButton
+    private lateinit var btnVoiceInput: Button
     private var voiceInputManager: VoiceInputManager? = null
     private var isVoiceRecording = false
     private var voiceRecordingDialog: VoiceRecordingDialog? = null

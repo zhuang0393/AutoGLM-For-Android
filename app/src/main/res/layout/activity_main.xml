@@ -199,15 +199,6 @@
                             android:textSize="22sp" />
 
                         <ImageButton
-                            android:id="@+id/btnVoiceInput"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:background="?android:attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/voice_input_title"
-                            android:src="@drawable/ic_mic"
-                            android:tint="@color/icon_secondary" />
-
-                        <ImageButton
                             android:id="@+id/btnSelectTemplate"
                             android:layout_width="56dp"
                             android:layout_height="56dp"
@@ -241,20 +232,43 @@
 
                     </LinearLayout>
 
-                    <!-- Start Button inside card -->
-                    <Button
-                        android:id="@+id/startTaskBtn"
-                        style="@style/Widget.App.Button.Tonal.Large"
-                        android:layout_width="wrap_content"
-                        android:layout_height="64dp"
+                    <!-- Voice Input and Start Buttons Row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
                         android:layout_marginTop="20dp"
-                        android:enabled="false"
-                        android:text="@string/start_task"
-                        android:textSize="22sp"
-                        android:drawableStart="@drawable/ic_play"
-                        android:drawablePadding="12dp"
-                        android:paddingHorizontal="32dp"
-                        android:gravity="center_vertical|start" />
+                        android:orientation="horizontal"
+                        android:gravity="center">
+
+                        <!-- Voice Input Button -->
+                        <Button
+                            android:id="@+id/btnVoiceInput"
+                            style="@style/Widget.App.Button.Tonal.Large"
+                            android:layout_width="wrap_content"
+                            android:layout_height="72dp"
+                            android:layout_marginEnd="16dp"
+                            android:text="@string/voice_input_title"
+                            android:textSize="24sp"
+                            android:drawableStart="@drawable/ic_mic"
+                            android:drawablePadding="12dp"
+                            android:paddingHorizontal="40dp"
+                            android:gravity="center_vertical|start" />
+
+                        <!-- Start Button -->
+                        <Button
+                            android:id="@+id/startTaskBtn"
+                            style="@style/Widget.App.Button.Tonal.Large"
+                            android:layout_width="wrap_content"
+                            android:layout_height="72dp"
+                            android:enabled="false"
+                            android:text="@string/start_task"
+                            android:textSize="24sp"
+                            android:drawableStart="@drawable/ic_play"
+                            android:drawablePadding="12dp"
+                            android:paddingHorizontal="40dp"
+                            android:gravity="center_vertical|start" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

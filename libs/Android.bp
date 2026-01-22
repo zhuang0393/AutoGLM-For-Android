@@ -1,0 +1,111 @@
+// Android.bp for prebuilt libraries
+// This file defines prebuilt libraries used by AutoGLM
+
+// Sherpa-ONNX prebuilt library
+// Download the AAR from: https://jitpack.io/com/github/k2-fsa/sherpa-onnx/1.12.20/sherpa-onnx-1.12.20.aar
+// Place it as libs/sherpa-onnx.aar
+// Extract JNI libraries from AAR: unzip -q sherpa-onnx.aar -d temp && cp -r temp/jni jni_libs && rm -rf temp
+
+// Native JNI libraries (extracted from AAR)
+// Note: Order matters - dependencies must be defined before dependents
+
+// libonnxruntime has minimal dependencies
+cc_prebuilt_library_shared {
+    name: "libonnxruntime",
+    arch: {
+        arm64: {
+            srcs: ["jni_libs/arm64-v8a/libonnxruntime.so"],
+        },
+        arm: {
+            srcs: ["jni_libs/armeabi-v7a/libonnxruntime.so"],
+        },
+    },
+    shared_libs: [
+        "liblog",
+    ],
+    strip: {
+        none: true,
+    },
+    product_specific: true,
+}
+
+// libsherpa-onnx-c-api depends on libonnxruntime
+cc_prebuilt_library_shared {
+    name: "libsherpa-onnx-c-api",
+    arch: {
+        arm64: {
+            srcs: ["jni_libs/arm64-v8a/libsherpa-onnx-c-api.so"],
+        },
+        arm: {
+            srcs: ["jni_libs/armeabi-v7a/libsherpa-onnx-c-api.so"],
+        },
+    },
+    shared_libs: [
+        "libandroid",
+        "liblog",
+        "libonnxruntime",
+    ],
+    strip: {
+        none: true,
+    },
+    product_specific: true,
+}
+
+// libsherpa-onnx-cxx-api depends on libsherpa-onnx-c-api and libonnxruntime
+cc_prebuilt_library_shared {
+    name: "libsherpa-onnx-cxx-api",
+    arch: {
+        arm64: {
+            srcs: ["jni_libs/arm64-v8a/libsherpa-onnx-cxx-api.so"],
+        },
+        arm: {
+            srcs: ["jni_libs/armeabi-v7a/libsherpa-onnx-cxx-api.so"],
+        },
+    },
+    shared_libs: [
+        "libandroid",
+        "liblog",
+        "libonnxruntime",
+        "libsherpa-onnx-c-api",
+    ],
+    strip: {
+        none: true,
+    },
+    product_specific: true,
+}
+
+// libsherpa-onnx-jni depends on libonnxruntime (and others)
+cc_prebuilt_library_shared {
+    name: "libsherpa-onnx-jni",
+    arch: {
+        arm64: {
+            srcs: ["jni_libs/arm64-v8a/libsherpa-onnx-jni.so"],
+        },
+        arm: {
+            srcs: ["jni_libs/armeabi-v7a/libsherpa-onnx-jni.so"],
+        },
+    },
+    shared_libs: [
+        "libandroid",
+        "liblog",
+        "libonnxruntime",
+    ],
+    strip: {
+        none: true,
+    },
+    product_specific: true,
+}
+
+// Java/Kotlin library from AAR
+android_library_import {
+    name: "sherpa-onnx-prebuilt",
+
+    // AAR file location (relative to this Android.bp file)
+    aars: ["sherpa-onnx.aar"],
+
+    // SDK version
+    sdk_version: "current",
+
+    // Product-specific
+    product_specific: true,
+}

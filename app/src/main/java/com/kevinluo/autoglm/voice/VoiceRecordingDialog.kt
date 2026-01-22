@@ -218,17 +218,51 @@ class VoiceRecordingDialog(
 
             override fun onFinalResult(result: VoiceRecognitionResult) {
                 scope.launch {
-                    pendingResult = result
-                    setState(State.RESULT)
-                    startCountdown()
+                    // 如果识别结果为空，显示未检测到语音
+                    if (result.text.isBlank()) {
+                        setState(State.NO_SPEECH)
+                    } else {
+                        pendingResult = result
+                        setState(State.RESULT)
+                        startCountdown()
+                    }
                 }
             }
 
             override fun onError(error: VoiceError) {
                 scope.launch {
-                    cleanup()
-                    dismiss()
-                    onError(error)
+                    // 对于模型加载失败等错误，在对话框内显示错误信息，而不是直接关闭
+                    when (error) {
+                        VoiceError.ModelLoadFailed,
+                        VoiceError.ModelNotDownloaded -> {
+                            // 停止录音但不关闭对话框
+                            voiceInputManager.cancelRecording()
+
+                            // 显示错误状态，允许用户重试或取消
+                            tvStatus.text = when (error) {
+                                VoiceError.ModelLoadFailed -> context.getString(R.string.voice_model_load_failed)
+                                VoiceError.ModelNotDownloaded -> context.getString(R.string.voice_model_not_downloaded)
+                                else -> context.getString(R.string.voice_unknown_error)
+                            }
+                            waveformView.visibility = View.GONE
+                            progressBar.visibility = View.GONE
+                            tvResultText.visibility = View.GONE
+                            btnLeft.isEnabled = true
+                            btnLeft.text = context.getString(R.string.cancel)
+                            btnRight.isEnabled = true
+                            btnRight.text = context.getString(R.string.voice_retry)
+                            currentState = State.NO_SPEECH // 复用 NO_SPEECH 状态显示错误
+
+                            // 通知外部错误（显示 Toast），但不关闭对话框
+                            onError(error)
+                        }
+                        else -> {
+                            // 其他错误直接关闭对话框
+                            cleanup()
+                            dismiss()
+                            onError(error)
+                        }
+                    }
                 }
             }
 
@@ -272,7 +306,13 @@ class VoiceRecordingDialog(
      * 单行居中，多行左对齐
      */
     private fun setResultText(text: String) {
-        tvResultText.text = text
+        // 如果文字为空，显示提示信息
+        val displayText = if (text.isBlank()) {
+            context.getString(R.string.voice_no_result)
+        } else {
+            text
+        }
+        tvResultText.text = displayText
         tvResultText.post {
             val gravity = if (tvResultText.lineCount > 1) {
                 Gravity.START or Gravity.CENTER_VERTICAL
@@ -289,9 +329,11 @@ class VoiceRecordingDialog(
         pendingResult = null
         dismiss()
 
-        if (result != null) {
+        // 只有当结果不为空时才调用 onResult
+        if (result != null && result.text.isNotBlank()) {
             onResult(result)
         }
+        // 如果结果为空，不调用 onResult，让对话框正常关闭即可
     }
 
     private fun cleanup() {

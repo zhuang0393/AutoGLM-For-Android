@@ -40,6 +40,16 @@ android_app {
         // Coroutines are required by app code. Keep them, but disable R8/proguard below to
         // avoid classpath conflicts seen during minification.
         "kotlinx-coroutines-android",
+        // Prebuilt AAR library (android_library_import is static by default)
+        "sherpa-onnx-prebuilt",
+    ],
+
+    // Native JNI libraries from sherpa-onnx AAR
+    jni_libs: [
+        "libsherpa-onnx-jni",
+        "libsherpa-onnx-c-api",
+        "libsherpa-onnx-cxx-api",
+        "libonnxruntime",
     ],
 
     // AIDL files - system will auto-detect from srcs

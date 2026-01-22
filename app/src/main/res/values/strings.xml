@@ -291,6 +291,7 @@
     <string name="voice_recording_hint">正在聆听，请说话…</string>
     <string name="voice_recognizing_hint">正在识别中...</string>
     <string name="voice_no_speech_detected">未检测到语音，请重试</string>
+    <string name="voice_no_result">未识别到有效内容</string>
     <string name="voice_result_hint">识别完成，即将执行</string>
     <string name="voice_stop_recording">停止输入</string>
     <string name="voice_auto_run_countdown">%d 秒后自动运行</string>

@@ -353,12 +353,20 @@ class VoiceInputManager(private val context: Context) {
                 Logger.d(TAG, "[Performance] Recognizer initialization completed")
             }
 
+            // 检查识别器是否真的可用
+            if (recognizer == null || !recognizer!!.isInitialized()) {
+                Logger.e(TAG, "Recognizer not available for recognition")
+                withContext(Dispatchers.Main) {
+                    listener?.onError(VoiceError.ModelLoadFailed)
+                }
+                return@withContext
+            }
+
             val recognitionStartTime = System.currentTimeMillis()
 
             // 性能优化：直接转换为 FloatArray，避免额外的列表操作
             val samplesArray = allSamples.toFloatArray()
-            val result = recognizer?.recognize(samplesArray)
-                ?: VoiceRecognitionResult(text = "", durationMs = 0)
+            val result = recognizer!!.recognize(samplesArray)
 
             val recognitionTime = System.currentTimeMillis() - recognitionStartTime
             Logger.i(TAG, "[Performance] Recognition completed in ${recognitionTime}ms, result: ${result.text}")

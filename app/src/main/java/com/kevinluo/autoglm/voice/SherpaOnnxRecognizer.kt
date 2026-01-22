@@ -1,21 +1,21 @@
 package com.kevinluo.autoglm.voice
 
 import android.content.Context
-// TODO: Add sherpa-onnx library to Android.bp if available in system build
-// import com.k2fsa.sherpa.onnx.*
 import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// Stub classes for compilation - replace with actual library imports when available
-private typealias OfflineRecognizer = Any
-private typealias Vad = Any
-private typealias VadModelConfig = Any
-private typealias SileroVadModelConfig = Any
-private typealias OfflineRecognizerConfig = Any
-private typealias OfflineModelConfig = Any
-private typealias OfflineParaformerModelConfig = Any
+// Import sherpa-onnx library
+// For Gradle build: library is available via dependency
+// For Android.bp system build: library is provided via prebuilt AAR in libs/
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+import com.k2fsa.sherpa.onnx.Vad
+import com.k2fsa.sherpa.onnx.VadModelConfig
+import com.k2fsa.sherpa.onnx.SileroVadModelConfig
+import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineParaformerModelConfig
 
 /**
  * Sherpa-ONNX 语音识别器封装
@@ -81,9 +81,8 @@ class SherpaOnnxRecognizer(private val context: Context) {
         fun releaseGlobalCache() {
             Logger.i(TAG, "[Performance] Releasing global model cache")
             try {
-                // TODO: Uncomment when sherpa-onnx library is available
-                // cachedVad?.release()
-                // cachedRecognizer?.release()
+                cachedVad?.release()
+                cachedRecognizer?.release()
             } catch (e: Exception) {
                 Logger.e(TAG, "Error releasing global cache", e)
             } finally {
@@ -154,9 +153,7 @@ class SherpaOnnxRecognizer(private val context: Context) {
                 val vadLoadStart = System.currentTimeMillis()
 
                 // 初始化 VAD
-                // TODO: Uncomment when sherpa-onnx library is available
                 // 性能优化：调整 VAD 参数以平衡准确性和性能
-                /*
                 val vadConfig = VadModelConfig(
                     sileroVadModelConfig = SileroVadModelConfig(
                         model = vadModelPath,
@@ -170,9 +167,6 @@ class SherpaOnnxRecognizer(private val context: Context) {
                     debug = false
                 )
                 vad = Vad(config = vadConfig)
-                */
-                Logger.w(TAG, "Sherpa-ONNX library not available - VAD initialization skipped")
-                vad = null
 
                 val vadLoadTime = System.currentTimeMillis() - vadLoadStart
                 Logger.d(TAG, "[Performance] VAD initialized in ${vadLoadTime}ms")
@@ -180,9 +174,7 @@ class SherpaOnnxRecognizer(private val context: Context) {
                 val asrLoadStart = System.currentTimeMillis()
 
                 // 初始化离线识别器（Paraformer 中英双语小模型）
-                // TODO: Uncomment when sherpa-onnx library is available
                 // 性能优化：使用 int8 量化模型，减少内存占用
-                /*
                 val config = OfflineRecognizerConfig(
                     modelConfig = OfflineModelConfig(
                         paraformer = OfflineParaformerModelConfig(
@@ -195,9 +187,6 @@ class SherpaOnnxRecognizer(private val context: Context) {
                     decodingMethod = "greedy_search"  // 性能优化：greedy_search 比 beam_search 更快
                 )
                 recognizer = OfflineRecognizer(config = config)
-                */
-                Logger.w(TAG, "Sherpa-ONNX library not available - Recognizer initialization skipped")
-                recognizer = null
 
                 val asrLoadTime = System.currentTimeMillis() - asrLoadStart
                 Logger.d(TAG, "[Performance] ASR recognizer (Paraformer) initialized in ${asrLoadTime}ms")
@@ -255,17 +244,13 @@ class SherpaOnnxRecognizer(private val context: Context) {
                 // 计算音频时长
                 val audioDurationMs = (samples.size * 1000L) / SAMPLE_RATE
 
-                // TODO: Uncomment when sherpa-onnx library is available
-                /*
+                // 执行识别
                 val stream = recognizer!!.createStream()
                 stream.acceptWaveform(samples, SAMPLE_RATE)
                 recognizer!!.decode(stream)
 
                 val result = recognizer!!.getResult(stream)
                 val text = result.text.trim()
-                */
-                Logger.w(TAG, "Sherpa-ONNX library not available - recognition skipped")
-                val text = ""
 
                 val recognitionTimeMs = System.currentTimeMillis() - startTime
 
@@ -329,8 +314,6 @@ class SherpaOnnxRecognizer(private val context: Context) {
             val startTime = System.currentTimeMillis()
 
             try {
-                // TODO: Uncomment when sherpa-onnx library is available
-                /*
                 // 将音频数据送入 VAD
                 vad!!.acceptWaveform(samples)
 
@@ -351,9 +334,6 @@ class SherpaOnnxRecognizer(private val context: Context) {
                         results.add(result)
                     }
                 }
-                */
-                Logger.w(TAG, "Sherpa-ONNX library not available - VAD recognition skipped")
-                val segmentCount = 0
 
                 val totalTime = System.currentTimeMillis() - startTime
                 Logger.d(TAG, "[Performance] VAD recognition completed: ${segmentCount} segments in ${totalTime}ms")
@@ -376,13 +356,8 @@ class SherpaOnnxRecognizer(private val context: Context) {
         if (vad == null) return false
 
         try {
-            // TODO: Uncomment when sherpa-onnx library is available
-            /*
             vad!!.acceptWaveform(samples)
             return !vad!!.empty()
-            */
-            Logger.w(TAG, "Sherpa-ONNX library not available - VAD check skipped")
-            return false
         } catch (e: Exception) {
             Logger.e(TAG, "VAD check failed", e)
             return false
@@ -394,9 +369,7 @@ class SherpaOnnxRecognizer(private val context: Context) {
      */
     fun resetVad() {
         try {
-            // TODO: Uncomment when sherpa-onnx library is available
-            // vad?.clear()
-            Logger.w(TAG, "Sherpa-ONNX library not available - VAD reset skipped")
+            vad?.clear()
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to reset VAD", e)
         }
