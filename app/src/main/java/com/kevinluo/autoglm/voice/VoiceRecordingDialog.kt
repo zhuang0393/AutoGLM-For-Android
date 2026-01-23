@@ -1,16 +1,17 @@
 package com.kevinluo.autoglm.voice
 
+import android.app.Activity
 import android.app.Dialog
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import android.app.Activity
-import android.widget.Button
 import com.kevinluo.autoglm.R
 import com.kevinluo.autoglm.util.Logger
 import kotlinx.coroutines.*
@@ -78,7 +79,20 @@ class VoiceRecordingDialog(
         window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
             setGravity(Gravity.CENTER)
-            setType(WindowManager.LayoutParams.TYPE_APPLICATION_PANEL)
+
+            // Use TYPE_APPLICATION_OVERLAY for Service context, TYPE_APPLICATION_PANEL for Activity context
+            val windowType = if (context is Activity) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+            } else {
+                // Service context - use overlay type
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+            }
+            setType(windowType)
 
             val params = attributes
             params.width = (context.resources.displayMetrics.widthPixels * 0.85).toInt()

@@ -76,25 +76,31 @@ class ActionHandler(
     }
 
     /**
-     * Hides the floating window before touch operations to prevent it from intercepting touches.
+     * Enables touch passthrough for the floating window before touch operations.
+     *
+     * This allows touch events to pass through the window to the underlying application
+     * while keeping the window visible. The window remains visible but cannot receive
+     * touch events during action execution.
      *
      * This method should be called before any touch-based operation (tap, swipe, etc.)
      * to ensure the floating window doesn't intercept the touch events.
      */
-    private suspend fun hideFloatingWindow() {
-        floatingWindowProvider?.invoke()?.hide()
-        delay(WINDOW_HIDE_DELAY_MS)
+    private suspend fun enableTouchPassthrough() {
+        floatingWindowProvider?.invoke()?.enableTouchPassthrough()
+        // Small delay to ensure flag is applied before action execution
+        delay(50)
     }
 
     /**
-     * Shows the floating window after touch operations complete.
+     * Disables touch passthrough for the floating window after touch operations complete.
      *
-     * This method should be called after touch-based operations complete
-     * to restore the floating window visibility.
+     * Restores normal touch behavior so the window can receive touch events again,
+     * including button clicks.
      */
-    private suspend fun showFloatingWindow() {
-        delay(WINDOW_SHOW_DELAY_MS)
-        floatingWindowProvider?.invoke()?.show()
+    private suspend fun disableTouchPassthrough() {
+        // Small delay to ensure action is fully executed before restoring
+        delay(50)
+        floatingWindowProvider?.invoke()?.disableTouchPassthrough()
     }
 
     /**
@@ -176,8 +182,8 @@ class ActionHandler(
             action.x, action.y, screenWidth, screenHeight
         )
 
-        // Hide floating window to prevent touch interception
-        hideFloatingWindow()
+        // Enable touch passthrough to prevent window from intercepting touches
+        enableTouchPassthrough()
 
         return try {
             val result = deviceExecutor.tap(absX, absY)
@@ -188,8 +194,8 @@ class ActionHandler(
                 ActionResult(true, false, "点击 ($absX, $absY)")
             }
         } finally {
-            // Always show floating window after tap, even if tap fails
-            showFloatingWindow()
+            // Always disable touch passthrough after tap, even if tap fails
+            disableTouchPassthrough()
         }
     }
 
@@ -220,13 +226,13 @@ class ActionHandler(
             )
         }
 
-        // Hide floating window to prevent touch interception
-        hideFloatingWindow()
+        // Enable touch passthrough to prevent window from intercepting touches
+        enableTouchPassthrough()
 
         return try {
             val result = deviceExecutor.swipe(swipePath.points, swipePath.durationMs)
 
-            // Wait for swipe animation to complete before showing floating window
+            // Wait for swipe animation to complete before disabling touch passthrough
             // The swipe command returns immediately, but the gesture takes time
             delay(swipePath.durationMs.toLong() + 100)
 
@@ -237,24 +243,24 @@ class ActionHandler(
                 ActionResult(true, false, "滑动 从($startAbsX, $startAbsY) 到($endAbsX, $endAbsY)")
             }
         } finally {
-            // Always show floating window after swipe, even if swipe fails
-            showFloatingWindow()
+            // Always disable touch passthrough after swipe, even if swipe fails
+            disableTouchPassthrough()
         }
     }
 
     /**
      * Executes a Type action.
      *
-     * IMPORTANT: We must hide the floating window before typing to ensure:
-     * 1. The target app's input field has focus
+     * IMPORTANT: We enable touch passthrough before typing to ensure:
+     * 1. The target app's input field can receive focus
      * 2. AutoGLM Keyboard's onCreateInputView() is called
      * 3. The BroadcastReceiver is registered
      *
-     * Uses try-finally to ensure floating window is restored even if typing fails.
+     * Uses try-finally to ensure touch passthrough is disabled even if typing fails.
      */
     private suspend fun executeType(action: AgentAction.Type): ActionResult {
-        // Hide floating window to ensure target app has focus
-        hideFloatingWindow()
+        // Enable touch passthrough to ensure target app can receive focus
+        enableTouchPassthrough()
 
         return try {
             // Small delay to let the system settle focus
@@ -263,18 +269,18 @@ class ActionHandler(
             val result = textInputManager.typeText(action.text)
             ActionResult(result.success, false, result.message)
         } finally {
-            // Always show floating window after typing, even if typing fails
-            showFloatingWindow()
+            // Always disable touch passthrough after typing, even if typing fails
+            disableTouchPassthrough()
         }
     }
 
     /**
      * Executes a TypeName action (same as Type).
-     * Uses try-finally to ensure floating window is restored even if typing fails.
+     * Uses try-finally to ensure touch passthrough is disabled even if typing fails.
      */
     private suspend fun executeTypeName(action: AgentAction.TypeName): ActionResult {
-        // Hide floating window to ensure target app has focus
-        hideFloatingWindow()
+        // Enable touch passthrough to ensure target app can receive focus
+        enableTouchPassthrough()
 
         return try {
             // Small delay to let the system settle focus
@@ -283,8 +289,8 @@ class ActionHandler(
             val result = textInputManager.typeText(action.text)
             ActionResult(result.success, false, "输入名称: ${action.text}")
         } finally {
-            // Always show floating window after typing, even if typing fails
-            showFloatingWindow()
+            // Always disable touch passthrough after typing, even if typing fails
+            disableTouchPassthrough()
         }
     }
 
@@ -481,13 +487,13 @@ class ActionHandler(
             action.x, action.y, screenWidth, screenHeight
         )
 
-        // Hide floating window to prevent touch interception
-        hideFloatingWindow()
+        // Enable touch passthrough to prevent window from intercepting touches
+        enableTouchPassthrough()
 
         return try {
             val result = deviceExecutor.longPress(absX, absY, action.durationMs)
 
-            // Wait for long press to complete before showing floating window
+            // Wait for long press to complete before disabling touch passthrough
             // The command returns immediately, but the gesture takes time
             delay(action.durationMs.toLong() + 100)
 
@@ -498,8 +504,8 @@ class ActionHandler(
                 ActionResult(true, false, "长按 ($absX, $absY) ${action.durationMs}毫秒")
             }
         } finally {
-            // Always show floating window after long press, even if it fails
-            showFloatingWindow()
+            // Always disable touch passthrough after long press, even if it fails
+            disableTouchPassthrough()
         }
     }
 
@@ -517,8 +523,8 @@ class ActionHandler(
             action.x, action.y, screenWidth, screenHeight
         )
 
-        // Hide floating window to prevent touch interception
-        hideFloatingWindow()
+        // Enable touch passthrough to prevent window from intercepting touches
+        enableTouchPassthrough()
 
         return try {
             val result = deviceExecutor.doubleTap(absX, absY)
@@ -529,8 +535,8 @@ class ActionHandler(
                 ActionResult(true, false, "双击 ($absX, $absY)")
             }
         } finally {
-            // Always show floating window after double tap, even if it fails
-            showFloatingWindow()
+            // Always disable touch passthrough after double tap, even if it fails
+            disableTouchPassthrough()
         }
     }
 

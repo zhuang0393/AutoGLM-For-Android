@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.view.SurfaceControl
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -291,6 +292,113 @@ class FloatingWindowService : Service(), FloatingWindowController {
      *
      */
     override fun isVisible(): Boolean = isAttached.get()
+
+    /**
+     * Gets the SurfaceControl for the floating window.
+     *
+     * This is used to exclude the window from screenshots using
+     * SurfaceControl.setSkipScreenshot() for better performance.
+     *
+     * Uses reflection to access hidden APIs (viewRootImpl and surfaceControl).
+     *
+     * @return SurfaceControl instance, or null if not available or API not supported
+     */
+    override fun getSurfaceControl(): android.view.SurfaceControl? {
+        return try {
+            if (!isAttached.get() || floatingView == null) {
+                Logger.d(TAG, "getSurfaceControl: window not attached or view is null")
+                return null
+            }
+
+            // Get ViewRootImpl through reflection (hidden API)
+            val viewRootImplClass = Class.forName("android.view.ViewRootImpl")
+            val getViewRootImplMethod = View::class.java.getDeclaredMethod("getViewRootImpl")
+            getViewRootImplMethod.isAccessible = true
+            val viewRootImpl = getViewRootImplMethod.invoke(floatingView)
+
+            if (viewRootImpl == null) {
+                Logger.d(TAG, "getSurfaceControl: viewRootImpl is null")
+                return null
+            }
+
+            // Get SurfaceControl from ViewRootImpl using reflection (hidden API)
+            val surfaceControlField = viewRootImplClass.getDeclaredField("mSurfaceControl")
+            surfaceControlField.isAccessible = true
+            val surfaceControl = surfaceControlField.get(viewRootImpl) as? android.view.SurfaceControl
+
+            if (surfaceControl == null) {
+                Logger.d(TAG, "getSurfaceControl: surfaceControl is null")
+                return null
+            }
+
+            Logger.d(TAG, "getSurfaceControl: successfully obtained SurfaceControl")
+            surfaceControl
+        } catch (e: Exception) {
+            Logger.w(TAG, "getSurfaceControl: failed to get SurfaceControl", e)
+            null
+        }
+    }
+
+    /**
+     * Enables touch passthrough mode for the floating window.
+     *
+     * Sets FLAG_NOT_TOUCHABLE to allow touch events to pass through the window
+     * to the underlying application. The window remains visible but cannot receive
+     * touch events. This is used during action execution.
+     */
+    override fun enableTouchPassthrough() {
+        serviceScope.launch {
+            if (!isAttached.get() || layoutParams == null) {
+                Logger.d(TAG, "enableTouchPassthrough: window not attached")
+                return@launch
+            }
+
+            layoutParams?.let { params ->
+                val hasFlag = (params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) != 0
+                if (!hasFlag) {
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    try {
+                        windowManager?.updateViewLayout(floatingView, params)
+                        Logger.d(TAG, "enableTouchPassthrough: FLAG_NOT_TOUCHABLE added")
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "Error enabling touch passthrough", e)
+                    }
+                } else {
+                    Logger.d(TAG, "enableTouchPassthrough: already enabled")
+                }
+            }
+        }
+    }
+
+    /**
+     * Disables touch passthrough mode for the floating window.
+     *
+     * Removes FLAG_NOT_TOUCHABLE to restore normal touch behavior.
+     * The window can now receive touch events normally, including button clicks.
+     */
+    override fun disableTouchPassthrough() {
+        serviceScope.launch {
+            if (!isAttached.get() || layoutParams == null) {
+                Logger.d(TAG, "disableTouchPassthrough: window not attached")
+                return@launch
+            }
+
+            layoutParams?.let { params ->
+                val hasFlag = (params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) != 0
+                if (hasFlag) {
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    try {
+                        windowManager?.updateViewLayout(floatingView, params)
+                        Logger.d(TAG, "disableTouchPassthrough: FLAG_NOT_TOUCHABLE removed")
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "Error disabling touch passthrough", e)
+                    }
+                } else {
+                    Logger.d(TAG, "disableTouchPassthrough: already disabled")
+                }
+            }
+        }
+    }
 
     // ==================== Public Methods ====================
 

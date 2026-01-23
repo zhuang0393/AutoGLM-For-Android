@@ -184,6 +184,9 @@ class AutoGLMKeyboardService : InputMethodService() {
         super.onStartInputView(info, restarting)
         Logger.d(TAG, "onStartInputView: restarting=$restarting")
 
+        // Disable fullscreen extract view to prevent white overlay
+        setExtractViewShown(false)
+
         // Ensure receiver is registered
         registerInputReceiver()
 
@@ -207,6 +210,22 @@ class AutoGLMKeyboardService : InputMethodService() {
     override fun onFinishInput() {
         super.onFinishInput()
         Logger.d(TAG, "onFinishInput")
+    }
+
+    /**
+     * Called to create the extract view (fullscreen input mode).
+     *
+     * Returns null to disable fullscreen input mode, which prevents the white fullscreen
+     * overlay from appearing when the input field gains focus.
+     *
+     * @param editorInfo Information about the text field
+     * @return null to disable extract view, or a custom view if needed
+     */
+    override fun onCreateExtractTextView(): View? {
+        Logger.d(TAG, "onCreateExtractTextView called - returning null to disable fullscreen mode")
+        // Return null to disable fullscreen extract view
+        // This prevents the white fullscreen overlay from appearing
+        return null
     }
 
     /**
